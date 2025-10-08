@@ -3,7 +3,7 @@
 This repository packages two pieces that work together:
 
 - **`stepintovision_ingest`** – pulls published content from the Step Into Vision blog via the public WordPress REST API and stores it locally.
-- **`stepintovision_mcp`** – exposes that stored content through a [Model Context Protocol](https://modelcontextprotocol.io/) server built on [`fastmcp`](https://github.com/gofastmcp/fastmcp).
+- **`stepintovision_mcp`** – exposes that stored content through a [Model Context Protocol](https://modelcontextprotocol.io/) server built on [`FastMCP`](https://github.com/jlowin/fastmcp).
 
 The goal is to let anyone ingest the Step Into Vision catalog and connect it to an MCP-aware client (Claude Desktop, Cursor, etc.).
 
