@@ -73,7 +73,7 @@ Follow the numbered steps below or run `./scripts/setup.sh` to automate steps 1â
 
 All responses include canonical URLs so that downstream consumers can cite the original content.
 
-## An example of how to use gpt5-codex
+## An example of how to use this with `gpt5-codex`
 
 I use this with `gpt5-codex` right now, and I add this to the `config.toml` file to do that.
 
