@@ -21,23 +21,33 @@ The goal is to let anyone ingest the Step Into Vision catalog and connect it to 
 
 ## Getting Started
 
-1. **Install dependencies**
+Follow the numbered steps below or run `./scripts/setup.sh` to automate steps 1–3.
+
+1. **Use Python 3.11+**
 
    ```bash
-   uv pip install -r pyproject.toml
+   python3 --version  # should report 3.11 or newer
    ```
 
-   > Using `pip`: `python3 -m pip install .` will install both packages and the `stepinto-mcp` script.
+   If your default `python3` is older, install 3.11 (e.g., via `uv python install 3.11` or `pyenv`) and set `PYTHON_BIN=python3.11` for later commands.
 
-2. **Populate the SQLite database**
+2. **Install the project**
+
+   ```bash
+   uv pip install .
+   ```
+
+   Without `uv`, run `python3.11 -m pip install .` (or pass the interpreter you set in step 1). This installs both packages and the `stepinto-mcp` CLI.
+
+3. **Ingest the Step Into Vision catalog**
 
    ```bash
    python3 -m stepintovision_ingest.ingest --db data/stepinto.db
    ```
 
-   Run `python3 -m stepintovision_ingest.ingest --help` to see options for page size, API base URL, or incremental fetches via `--modified-after`.
+   Use `--help` to see flags for page size, API base URL, or incremental fetches via `--modified-after`.
 
-3. **Expose the tools to an MCP client**
+4. **Expose the tools to an MCP client**
 
    The ingestion step writes `data/stepinto.db`, which is ignored by git so everyone brings their own copy. Point the server at that file:
 
@@ -48,11 +58,11 @@ The goal is to let anyone ingest the Step Into Vision catalog and connect it to 
    The default transport is stdio, which is what most MCP clients expect. To host it over HTTP/SSE:
 
    ```bash
-   STEPINTOVISION_DB=./data/stepinto.db python -m stepintovision_mcp.server \
+   STEPINTOVISION_DB=./data/stepinto.db python3.11 -m stepintovision_mcp.server \
      --transport http --host 0.0.0.0 --port 8000
    ```
 
-   See `python -m stepintovision_mcp.server --help` for the full CLI surface.
+   See `python3.11 -m stepintovision_mcp.server --help` for the full CLI surface.
 
 ## Available Tools
 
@@ -73,7 +83,9 @@ All responses include canonical URLs so that downstream consumers can cite the o
 Install the optional development dependencies with:
 
 ```bash
-uv pip install -r pyproject.toml --extra dev
+uv pip install '.[dev]'
 ```
+
+Without `uv`: `python3.11 -m pip install '.[dev]'`.
 
 Linting is handled by [Ruff](https://docs.astral.sh/ruff/). Feel free to open issues or PRs with improvements to the ingestion pipeline or exposed tools.
