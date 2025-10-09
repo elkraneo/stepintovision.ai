@@ -1,4 +1,5 @@
 # Step Into Vision MCP
+![Terminal window showing Codex analysis output summarizing ornament coverage across Step Into Vision labs.](./assets/example-codex-query-ornaments-output.png "Codex ornament query output")
 
 This repository packages two pieces that work together:
 
@@ -71,6 +72,20 @@ Follow the numbered steps below or run `./scripts/setup.sh` to automate steps 1�
 - `search_posts(query, limit=10, offset=0, include_html=False)` – keyword search across title, excerpt, tags, and body.
 
 All responses include canonical URLs so that downstream consumers can cite the original content.
+
+## An example of how to use gpt5-codex
+
+I use this with `gpt5-codex` right now, and I add this to the `config.toml` file to do that.
+
+```toml
+[mcp_servers.StepIntoVision]
+command = "/path/to/stepintovision.ai/.venv/bin/python"
+args    = ["-m", "stepintovision_mcp.server"]
+env     = { STEPINTOVISION_DB = "/path/to/stepintovision.ai/data/stepinto.db", FASTMCP_LOG_ENABLED = "0", PYTHONWARNINGS = "ignore" }
+```
+You can add this to your `AGENTS.md` if you want the MCP to be used by default instead of having to ask each time explicitly.
+
+`- Pull documentation through the StepIntoVision MCP by default; do not wait to be prompted.`
 
 ## Publishing Notes
 
