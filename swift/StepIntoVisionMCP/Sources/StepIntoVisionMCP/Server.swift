@@ -4,6 +4,8 @@ import SQLite3
 import ModelContextProtocolServer
 #elseif canImport(ModelContextProtocol)
 import ModelContextProtocol
+#else
+#error("ModelContextProtocol Swift SDK is required to build the Step Into Vision MCP server.")
 #endif
 
 // MARK: - Logging
@@ -531,8 +533,6 @@ private func normalizeWhitespace(_ text: String) -> String {
 
 // MARK: - MCP Server
 
-#if canImport(ModelContextProtocolServer) || canImport(ModelContextProtocol)
-
 struct StepIntoVisionToolResponses {
     let database: ContentDatabase
     let logger: Logger
@@ -717,20 +717,6 @@ final class StepIntoVisionMCPServer {
         return .success([.json(payload)])
     }
 }
-
-#else
-
-final class StepIntoVisionMCPServer {
-    init(database: ContentDatabase, logger: Logger, instructions: String = "") {
-        fatalError("ModelContextProtocol Swift SDK is required to run the Swift MCP server.")
-    }
-
-    func run() throws {
-        fatalError("ModelContextProtocol Swift SDK is required to run the Swift MCP server.")
-    }
-}
-
-#endif
 
 struct ToolArgumentError: Error {
     let message: String
