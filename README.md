@@ -17,6 +17,8 @@ The goal is to let anyone ingest the Step Into Vision catalog and connect it to 
 
 - `stepintovision_ingest/` – ingestion client, models, and storage helpers
 - `stepintovision_mcp/` – MCP tool definitions and CLI entry point (`stepinto-mcp`)
+- `swift/StepIntoVisionMCP/` – Swift-only MCP server that mirrors the Python tools over STDIO
+  via the official Model Context Protocol Swift SDK
 - `data/` – empty folder kept for your local SQLite database (ignored by git)
 - `pyproject.toml` – package metadata and dependencies
 
@@ -64,6 +66,13 @@ Follow the numbered steps below or run `./scripts/setup.sh` to automate steps 1�
    ```
 
    See `python3.11 -m stepintovision_mcp.server --help` for the full CLI surface.
+
+   Prefer Swift? Compile the executable inside `swift/StepIntoVisionMCP` and point it at the same database:
+
+   ```bash
+   swift build --package-path swift/StepIntoVisionMCP -c release
+   swift/StepIntoVisionMCP/.build/release/stepinto-swift-mcp --db ./data/stepinto.db
+   ```
 
 ## Available Tools
 
