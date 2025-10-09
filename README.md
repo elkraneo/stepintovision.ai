@@ -75,7 +75,7 @@ All responses include canonical URLs so that downstream consumers can cite the o
 
 ## An example of how to use this with `gpt5-codex`
 
-I use this with `gpt5-codex` right now, and I add this to the `config.toml` file to do that.
+Add to the `config.toml.
 
 ```toml
 [mcp_servers.StepIntoVision]
@@ -83,7 +83,8 @@ command = "/path/to/stepintovision.ai/.venv/bin/python"
 args    = ["-m", "stepintovision_mcp.server"]
 env     = { STEPINTOVISION_DB = "/path/to/stepintovision.ai/data/stepinto.db", FASTMCP_LOG_ENABLED = "0", PYTHONWARNINGS = "ignore" }
 ```
-You can add this to your `AGENTS.md` if you want the MCP to be used by default instead of having to ask each time explicitly.
+
+Optionally you can also add this to your `AGENTS.md` if you want the MCP to be used by default instead of having to ask each time explicitly.
 
 `- Pull documentation through the StepIntoVision MCP by default; do not wait to be prompted.`
 
