@@ -18,7 +18,7 @@ let package = Package(
             name: "StepIntoVisionMCP",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                .product(name: "ModelContextProtocolServer", package: "swift-sdk")
+                .product(name: "ModelContextProtocol", package: "swift-sdk")
             ],
             path: "Sources"
         ),
