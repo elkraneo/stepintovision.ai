@@ -1,6 +1,8 @@
 import Foundation
 import SQLite3
-#if canImport(ModelContextProtocol)
+#if canImport(ModelContextProtocolServer)
+import ModelContextProtocolServer
+#elseif canImport(ModelContextProtocol)
 import ModelContextProtocol
 #endif
 
@@ -529,7 +531,7 @@ private func normalizeWhitespace(_ text: String) -> String {
 
 // MARK: - MCP Server
 
-#if canImport(ModelContextProtocol)
+#if canImport(ModelContextProtocolServer) || canImport(ModelContextProtocol)
 
 struct StepIntoVisionToolResponses {
     let database: ContentDatabase

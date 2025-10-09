@@ -10,15 +10,15 @@ let package = Package(
         .executable(name: "stepinto-swift-mcp", targets: ["StepIntoVisionMCP"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.2.3"),
-        .package(url: "https://github.com/modelcontextprotocol/swift-sdk", from: "0.1.0")
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.6.1"),
+        .package(url: "https://github.com/modelcontextprotocol/swift-sdk", from: "0.10.2")
     ],
     targets: [
         .executableTarget(
             name: "StepIntoVisionMCP",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                .product(name: "ModelContextProtocol", package: "swift-sdk")
+                .product(name: "ModelContextProtocolServer", package: "swift-sdk")
             ],
             path: "Sources"
         ),

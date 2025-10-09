@@ -11,8 +11,9 @@ official [Model Context Protocol Swift SDK](https://github.com/modelcontextproto
 for the transport and protocol machinery:
 
 - [`swift-argument-parser`](https://github.com/apple/swift-argument-parser) powers the CLI.
-- [`swift-sdk`](https://github.com/modelcontextprotocol/swift-sdk) hosts the STDIO MCP
-  server and provides type-safe tool registration.
+- [`swift-sdk`](https://github.com/modelcontextprotocol/swift-sdk) (via the
+  `ModelContextProtocolServer` product) hosts the STDIO MCP server and provides type-safe
+  tool registration.
 - Everything else is built on top of `Foundation` and the system SQLite (`libsqlite3`).
 
 ## Building
