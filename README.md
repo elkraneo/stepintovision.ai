@@ -75,7 +75,7 @@ All responses include canonical URLs so that downstream consumers can cite the o
 
 ## An example of how to use this with `gpt5-codex`
 
-Add to the `config.toml.
+Add to the `config.toml`.
 
 ```toml
 [mcp_servers.StepIntoVision]
