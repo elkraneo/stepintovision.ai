@@ -3,6 +3,7 @@ import Foundation
 import Logging
 import StepIntoVisionMCPCore
 
+@main
 @available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
 struct StepIntoVisionIngestCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
@@ -94,5 +95,3 @@ struct StepIntoVisionIngestCommand: AsyncParsableCommand {
         _ = BootstrapToken.once
     }
 }
-
-StepIntoVisionIngestCommand.main()
