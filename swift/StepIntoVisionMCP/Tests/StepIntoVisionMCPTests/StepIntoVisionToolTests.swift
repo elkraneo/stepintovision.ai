@@ -1,6 +1,7 @@
 import XCTest
-@testable import StepIntoVisionMCP
+@testable import StepIntoVisionMCPCore
 import SQLite3
+import MCP
 
 final class StepIntoVisionToolTests: XCTestCase {
     private var temporaryDirectory: URL!
@@ -35,15 +36,15 @@ final class StepIntoVisionToolTests: XCTestCase {
         XCTAssertEqual(count, 3)
 
         let items = payload["items"] as? [[String: Any]]
-        XCTAssertEqual(items?.count, 3)
-        XCTAssertEqual(items?.first?["slug"] as? String, "vision-update")
-        XCTAssertEqual(items?.last?["slug"] as? String, "founders-letter")
+        let slugs = items?.compactMap { $0["slug"] as? String }
+        XCTAssertEqual(slugs, ["vision-update", "founders-letter", "welcome"])
 
         let paging = payload["paging"] as? [String: Any]
         XCTAssertEqual(paging?["offset"] as? Int, 0)
         XCTAssertEqual(paging?["next_offset"] as? Int, 3)
 
-        let fallbackExcerpt = items?.last?["excerpt"] as? String
+        let founders = items?.first { $0["slug"] as? String == "founders-letter" }
+        let fallbackExcerpt = founders?["excerpt"] as? String
         XCTAssertEqual(fallbackExcerpt, "Welcome to the future of inclusive design.")
     }
 
@@ -70,11 +71,11 @@ final class StepIntoVisionToolTests: XCTestCase {
 
     func testGetPostThrowsWhenMissingIdentifier() throws {
         XCTAssertThrowsError(try toolResponses.getPost(arguments: GetPostArguments(slug: nil, postID: nil, includeHTML: nil, includeText: nil))) { error in
-            guard case let ToolArgumentError(message) = error as? ToolArgumentError else {
+            guard let toolError = error as? ToolArgumentError else {
                 XCTFail("Expected ToolArgumentError, got \(error)")
                 return
             }
-            XCTAssertEqual(message, "Either slug or post_id must be provided")
+            XCTAssertEqual(toolError.message, "Either slug or post_id must be provided")
         }
     }
 
@@ -87,6 +88,43 @@ final class StepIntoVisionToolTests: XCTestCase {
         XCTAssertEqual(item?["slug"] as? String, "founders-letter")
         XCTAssertNotNil(item?["content_html"] as? String)
         XCTAssertNil(item?["content_text"])
+    }
+
+    func testServerRegistersToolsWithOfficialSchemas() async throws {
+        let server = await StepIntoVisionMCPServer(database: database, logger: Logger(isVerbose: true))
+        let definitions = server.toolDefinitionsForTesting()
+        XCTAssertEqual(definitions.count, 3)
+        XCTAssertEqual(Set(definitions.map(\.name)), ["list_posts", "get_post", "search_posts"])
+
+        let listPosts = try XCTUnwrap(definitions.first(where: { $0.name == "list_posts" }))
+        let schemaObject = try XCTUnwrap(listPosts.inputSchema.objectValue)
+        XCTAssertEqual(schemaObject["type"], .string("object"))
+        let properties = try XCTUnwrap(schemaObject["properties"]?.objectValue)
+        XCTAssertNotNil(properties["limit"])
+        XCTAssertEqual(listPosts.annotations.readOnlyHint, true)
+
+        let searchPosts = try XCTUnwrap(definitions.first(where: { $0.name == "search_posts" }))
+        let searchSchema = try XCTUnwrap(searchPosts.inputSchema.objectValue)
+        let required = try XCTUnwrap(searchSchema["required"]?.arrayValue)
+        XCTAssertEqual(required, [.string("query")])
+    }
+
+    func testServerToolCallProducesJSONResource() async throws {
+        let server = await StepIntoVisionMCPServer(database: database, logger: Logger(isVerbose: true))
+        let result = try await server.callToolForTesting(name: "list_posts", arguments: [:] as [String: Value])
+        XCTAssertEqual(result.isError ?? false, false)
+        XCTAssertEqual(result.content.count, 2)
+
+        guard case let .resource(uri, mimeType, text) = result.content[1] else {
+            return XCTFail("Expected resource content for JSON payload")
+        }
+
+        XCTAssertEqual(mimeType, "application/json")
+        XCTAssertTrue(uri.hasPrefix("data:application/json;base64,"))
+
+        let jsonData = try XCTUnwrap(text?.data(using: .utf8))
+        let decoded = try JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+        XCTAssertEqual(decoded?["count"] as? Int, 3)
     }
 }
 

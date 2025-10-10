@@ -12,7 +12,7 @@ for the transport and protocol machinery:
 
 - [`swift-argument-parser`](https://github.com/apple/swift-argument-parser) powers the CLI.
 - [`swift-sdk`](https://github.com/modelcontextprotocol/swift-sdk) (via the
-  `ModelContextProtocol` product) hosts the STDIO MCP server and provides type-safe
+  `MCP` product) hosts the STDIO MCP server and provides type-safe
   tool registration.
 - Everything else is built on top of `Foundation` and the system SQLite (`libsqlite3`).
 
@@ -65,6 +65,16 @@ companion --server \
 
 Companion will show the three Step Into Vision tools (`list_posts`, `get_post`, and
 `search_posts`) exactly as the Python server does.
+
+## Testing
+
+The core server lives in the `StepIntoVisionMCPCore` library target so that it can be unit
+tested without spinning up the STDIO transport. Run the SwiftPM tests to exercise both the
+SQLite ingestion layer and the tool handlers end-to-end:
+
+```bash
+swift test --package-path swift/StepIntoVisionMCP
+```
 
 ## Feature Parity Notes
 

@@ -67,12 +67,21 @@ Follow the numbered steps below or run `./scripts/setup.sh` to automate steps 1â
 
    See `python3.11 -m stepintovision_mcp.server --help` for the full CLI surface.
 
-   Prefer Swift? Compile the executable inside `swift/StepIntoVisionMCP` and point it at the same database:
+  Prefer Swift? Compile the executable inside `swift/StepIntoVisionMCP` and point it at the same database. The Swift package
+  exposes a reusable `StepIntoVisionMCPCore` library plus the `stepinto-swift-mcp` CLI that wraps it via the official
+  [Model Context Protocol Swift SDK](https://github.com/modelcontextprotocol/swift-sdk):
 
-   ```bash
-   swift build --package-path swift/StepIntoVisionMCP -c release
-   swift/StepIntoVisionMCP/.build/release/stepinto-swift-mcp --db ./data/stepinto.db
-   ```
+  ```bash
+  swift build --package-path swift/StepIntoVisionMCP -c release
+  swift/StepIntoVisionMCP/.build/release/stepinto-swift-mcp --db ./data/stepinto.db
+  ```
+
+  Run the accompanying Swift tests any time you touch the MCP server to ensure the SQLite-backed tooling continues to line up
+  with the Python implementation:
+
+  ```bash
+  swift test --package-path swift/StepIntoVisionMCP
+  ```
 
 ## Available Tools
 

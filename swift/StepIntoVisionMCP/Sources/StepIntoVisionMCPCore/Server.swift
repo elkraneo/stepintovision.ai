@@ -1,37 +1,39 @@
 import Foundation
 import SQLite3
-#if canImport(ModelContextProtocolServer)
-import ModelContextProtocolServer
-#elseif canImport(ModelContextProtocol)
-import ModelContextProtocol
-#else
-#error("ModelContextProtocol Swift SDK is required to build the Step Into Vision MCP server.")
-#endif
+import MCP
+import Logging
 
 // MARK: - Logging
 
-struct Logger {
-    private let isVerbose: Bool
+public struct Logger: Sendable {
+    private let base: Logging.Logger
 
-    init(isVerbose: Bool) {
-        self.isVerbose = isVerbose
+    public init(isVerbose: Bool) {
+        var logger = Logging.Logger(label: "stepinto.swift.mcp")
+        logger.logLevel = isVerbose ? .debug : .info
+        self.base = logger
     }
 
-    func debug(_ message: @autoclosure () -> String) {
-        guard isVerbose else { return }
-        fputs("[debug] \(message())\n", stderr)
+    init(_ logger: Logging.Logger) {
+        self.base = logger
     }
 
-    func info(_ message: @autoclosure () -> String) {
-        fputs("[info] \(message())\n", stderr)
+    var transportLogger: Logging.Logger { base }
+
+    public func debug(_ message: @autoclosure () -> String) {
+        base.debug("\(message())")
     }
 
-    func warn(_ message: @autoclosure () -> String) {
-        fputs("[warn] \(message())\n", stderr)
+    public func info(_ message: @autoclosure () -> String) {
+        base.info("\(message())")
     }
 
-    func error(_ message: @autoclosure () -> String) {
-        fputs("[error] \(message())\n", stderr)
+    public func warn(_ message: @autoclosure () -> String) {
+        base.warning("\(message())")
+    }
+
+    public func error(_ message: @autoclosure () -> String) {
+        base.error("\(message())")
     }
 }
 
@@ -103,7 +105,7 @@ struct PostRecord: Codable {
     func toJSON(includeHTML: Bool, includeText: Bool) -> [String: Any] {
         var payload = summary().toJSON()
         payload.updateValue(guid, forKey: "guid")
-        payload.updateValue(iso8601Formatter.string(from: modifiedAt), forKey: "modified_at")
+        payload.updateValue(iso8601String(from: modifiedAt), forKey: "modified_at")
         if let authorSlug { payload["author_slug"] = authorSlug }
         if let authorID { payload["author_id"] = authorID }
         if let authorURL { payload["author_url"] = authorURL }
@@ -137,7 +139,7 @@ struct PostSummary {
             "title": title,
             "excerpt": excerpt,
             "url": link,
-            "published_at": iso8601Formatter.string(from: publishedAt),
+            "published_at": iso8601String(from: publishedAt),
             "categories": categories.map { $0.toJSON() },
             "tags": tags.map { $0.toJSON() }
         ]
@@ -155,11 +157,11 @@ enum ContentDatabaseError: Error {
     case notFound
 }
 
-final class ContentDatabase {
+public final class ContentDatabase {
     private let path: String
     private let logger: Logger
 
-    init(path: String, logger: Logger = Logger(isVerbose: false)) throws {
+    public init(path: String, logger: Logger = Logger(isVerbose: false)) throws {
         self.path = path
         self.logger = logger
         try checkDatabaseExists()
@@ -218,7 +220,7 @@ final class ContentDatabase {
         SELECT posts.*
         FROM posts
         \(whereClause)
-        ORDER BY datetime(posts.published_at) DESC
+        ORDER BY posts.published_at DESC
         LIMIT ? OFFSET ?
         """
         params.append(.int(limit))
@@ -255,7 +257,7 @@ final class ContentDatabase {
            OR posts.excerpt LIKE ?
            OR posts.content_html LIKE ?
            OR t.name LIKE ?
-        ORDER BY datetime(posts.published_at) DESC
+        ORDER BY posts.published_at DESC
         LIMIT ? OFFSET ?
         """
         let params: [SQLiteBinding] = [.text(like), .text(like), .text(like), .text(like), .int(limit), .int(offset)]
@@ -274,8 +276,6 @@ final class ContentDatabase {
                   let slug = row.stringValue(for: "slug"),
                   let title = row.stringValue(for: "title"),
                   let titleHTML = row.stringValue(for: "title_html"),
-                  let excerpt = row.stringValue(for: "excerpt") ?? "",
-                  let excerptHTML = row.stringValue(for: "excerpt_html") ?? "",
                   let contentHTML = row.stringValue(for: "content_html"),
                   let link = row.stringValue(for: "link"),
                   let guid = row.stringValue(for: "guid"),
@@ -285,6 +285,9 @@ final class ContentDatabase {
                 logger.warn("Skipping malformed row for post")
                 return nil
             }
+
+            let excerpt = row.stringValue(for: "excerpt") ?? ""
+            let excerptHTML = row.stringValue(for: "excerpt_html") ?? ""
 
             let categories = termMap[id]?["category"] ?? []
             let tags = termMap[id]?["post_tag"] ?? []
@@ -457,10 +460,10 @@ struct SQLiteRow {
 
     func dateValue(for column: String) -> Date? {
         guard let string = stringValue(for: column) else { return nil }
-        if let date = iso8601Formatter.date(from: string) {
-            return date
+        if let precise = iso8601Date(from: string, includesFractional: true) {
+            return precise
         }
-        return iso8601NoFractionFormatter.date(from: string)
+        return iso8601Date(from: string, includesFractional: false)
     }
 }
 
@@ -499,19 +502,24 @@ enum SQLiteValue {
 
 // MARK: - Utility helpers
 
-private let iso8601Formatter: ISO8601DateFormatter = {
+private func iso8601Formatter(includesFractional: Bool) -> ISO8601DateFormatter {
     let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    formatter.formatOptions = includesFractional
+        ? [.withInternetDateTime, .withFractionalSeconds]
+        : [.withInternetDateTime]
     return formatter
-}()
+}
 
-private let iso8601NoFractionFormatter: ISO8601DateFormatter = {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime]
-    return formatter
-}()
+private func iso8601String(from date: Date) -> String {
+    iso8601Formatter(includesFractional: true).string(from: date)
+}
+
+private func iso8601Date(from string: String, includesFractional: Bool) -> Date? {
+    iso8601Formatter(includesFractional: includesFractional).date(from: string)
+}
 
 private func htmlToText(_ html: String) -> String {
+#if canImport(UIKit) || canImport(AppKit)
     guard let data = html.data(using: .utf8) else { return html }
     if let attributed = try? NSAttributedString(
         data: data,
@@ -524,6 +532,14 @@ private func htmlToText(_ html: String) -> String {
         return attributed.string
     }
     return html
+#else
+    guard let regex = try? NSRegularExpression(pattern: "<[^>]+>", options: []) else {
+        return html
+    }
+    let range = NSRange(location: 0, length: html.utf16.count)
+    let stripped = regex.stringByReplacingMatches(in: html, options: [], range: range, withTemplate: " ")
+    return normalizeWhitespace(stripped)
+#endif
 }
 
 private func normalizeWhitespace(_ text: String) -> String {
@@ -546,8 +562,15 @@ struct StepIntoVisionToolResponses {
         if offset < 0 {
             throw ToolArgumentError("offset cannot be negative")
         }
-        let posts = try database.listPosts(limit: limit, offset: offset, categorySlug: arguments.categorySlug, tagSlug: arguments.tagSlug)
+        let posts = try database
+            .listPosts(limit: limit, offset: offset, categorySlug: arguments.categorySlug, tagSlug: arguments.tagSlug)
+            .sorted { $0.publishedAt > $1.publishedAt }
         let items = posts.map { $0.summary().toJSON() }
+        let filters: [String: Any] = [
+            "category_slug": arguments.categorySlug ?? NSNull(),
+            "tag_slug": arguments.tagSlug ?? NSNull()
+        ]
+
         return [
             "count": items.count,
             "items": items,
@@ -556,10 +579,7 @@ struct StepIntoVisionToolResponses {
                 "offset": offset,
                 "next_offset": offset + items.count
             ],
-            "filters": [
-                "category_slug": arguments.categorySlug ?? NSNull(),
-                "tag_slug": arguments.tagSlug ?? NSNull()
-            ]
+            "filters": filters
         ]
     }
 
@@ -587,7 +607,9 @@ struct StepIntoVisionToolResponses {
         if offset < 0 {
             throw ToolArgumentError("offset cannot be negative")
         }
-        let posts = try database.searchPosts(query: query, limit: limit, offset: offset)
+        let posts = try database
+            .searchPosts(query: query, limit: limit, offset: offset)
+            .sorted { $0.publishedAt > $1.publishedAt }
         let items = posts.map { $0.toJSON(includeHTML: arguments.includeHTML ?? false, includeText: !(arguments.includeHTML ?? false)) }
         return [
             "query": query,
@@ -602,119 +624,268 @@ struct StepIntoVisionToolResponses {
     }
 }
 
-final class StepIntoVisionMCPServer {
+public final class StepIntoVisionMCPServer: @unchecked Sendable {
+    private struct ToolRegistration {
+        let definition: MCP.Tool
+        let handler: @Sendable ([String: Value]?) async throws -> MCP.CallTool.Result
+    }
+
+    private static let serverName = "Step Into Vision Swift MCP"
+    private static let serverVersion = "0.3.0"
+
     private let database: ContentDatabase
     private let logger: Logger
     private let instructions: String
-    private let server: Server
+    private let server: MCP.Server
     private let toolResponses: StepIntoVisionToolResponses
+    private var tools: [String: ToolRegistration] = [:]
 
-    init(database: ContentDatabase, logger: Logger, instructions: String = StepIntoVisionMCPServer.defaultInstructions) throws {
+    public init(database: ContentDatabase, logger: Logger, instructions: String = StepIntoVisionMCPServer.defaultInstructions) async {
         self.database = database
         self.logger = logger
         self.instructions = instructions
         self.toolResponses = StepIntoVisionToolResponses(database: database, logger: logger)
 
-        let transport = try StdioTransport()
-        server = Server(
-            transport: transport,
-            configuration: Server.Configuration(
-                info: Server.Info(
-                    name: "Step Into Vision Swift MCP",
-                    version: "0.2.0",
-                    instructions: instructions
-                ),
-                capabilities: Server.Capabilities(
-                    tools: .init(listChanged: true),
-                    logs: .init(supportsStreaming: false)
-                )
-            )
+        self.server = MCP.Server(
+            name: Self.serverName,
+            version: Self.serverVersion,
+            instructions: instructions,
+            capabilities: MCP.Server.Capabilities(
+                logging: .init(),
+                tools: .init(listChanged: true)
+            ),
+            configuration: .default
         )
 
         registerTools()
+        await registerMethodHandlers()
     }
 
-    static let defaultInstructions = "Use these tools to browse and retrieve content from the Step Into Vision blog (https://stepinto.vision). Always include the post URL in your answer."
+    public static let defaultInstructions = "Use these tools to browse and retrieve content from the Step Into Vision blog (https://stepinto.vision). Always include the post URL in your answer."
 
-    func run() throws {
-        logger.info("Starting Step Into Vision Swift MCP server (Swift SDK)")
-        try server.run()
+    public func run() async throws {
+        logger.info("Starting Step Into Vision Swift MCP server (official Swift SDK)")
+
+        let transport = StdioTransport(logger: logger.transportLogger)
+        try await server.start(transport: transport)
+
+        await server.waitUntilCompleted()
         logger.info("Server exiting")
     }
 
+    private func registerMethodHandlers() async {
+        await server.withMethodHandler(MCP.ListTools.self) { [weak self] _ in
+            guard let self else { throw MCPError.internalError("Server deallocated") }
+            let definitions = self.tools.values.map(\.definition).sorted { $0.name < $1.name }
+            return MCP.ListTools.Result(tools: definitions)
+        }
+
+        await server.withMethodHandler(MCP.CallTool.self) { [weak self] parameters in
+            guard let self else { throw MCPError.internalError("Server deallocated") }
+            guard let registration = self.tools[parameters.name] else {
+                throw MCPError.methodNotFound("Unknown tool: \(parameters.name)")
+            }
+
+            do {
+                return try await registration.handler(parameters.arguments)
+            } catch let error as ToolArgumentError {
+                self.logger.warn("Rejected call to \(parameters.name) with validation error: \(error.message)")
+                return MCP.CallTool.Result(content: [.text(error.message)], isError: true)
+            } catch ContentDatabaseError.notFound {
+                self.logger.warn("Requested resource not found for tool \(parameters.name)")
+                return MCP.CallTool.Result(content: [.text("No matching content found.")], isError: true)
+            } catch let error as MCPError {
+                throw error
+            } catch {
+                self.logger.error("Unexpected error while handling \(parameters.name): \(error.localizedDescription)")
+                return MCP.CallTool.Result(
+                    content: [.text("Server error: \(error.localizedDescription)")],
+                    isError: true
+                )
+            }
+        }
+    }
+
     private func registerTools() {
-        server.registerTool(
-            ToolDefinition(
-                name: "list_posts",
-                description: "List the most recent posts published on Step Into Vision.",
-                inputSchema: .object(
-                    properties: [
-                        "limit": .integer(minimum: 1, maximum: 50, defaultValue: 10, description: "Maximum number of posts to return."),
-                        "offset": .integer(minimum: 0, defaultValue: 0, description: "Number of posts to skip before starting the list."),
-                        "category_slug": .string(description: "Filter results to a specific category slug."),
-                        "tag_slug": .string(description: "Filter results to a specific tag slug.")
-                    ],
-                    additionalProperties: false
-                )
-            )
-        ) { [self] invocation in
-            try self.handleListPosts(invocation: invocation)
+        registerTool(
+            name: "list_posts",
+            description: "List the most recent posts published on Step Into Vision.",
+            inputSchema: listPostsSchema()
+        ) { [self] arguments in
+            let decoded: ListPostsArguments = try Self.decode(arguments, as: ListPostsArguments.self)
+            let payload = try toolResponses.listPosts(arguments: decoded)
+            return try Self.makeJSONResult(from: payload)
         }
 
-        server.registerTool(
-            ToolDefinition(
-                name: "get_post",
-                description: "Fetch a specific Step Into Vision post by slug or numeric ID.",
-                inputSchema: .object(
-                    properties: [
-                        "slug": .string(),
-                        "post_id": .integer(),
-                        "include_html": .boolean(defaultValue: false),
-                        "include_text": .boolean(defaultValue: true)
-                    ],
-                    additionalProperties: false
-                )
-            )
-        ) { [self] invocation in
-            try self.handleGetPost(invocation: invocation)
+        registerTool(
+            name: "get_post",
+            description: "Fetch a specific Step Into Vision post by slug or numeric ID.",
+            inputSchema: getPostSchema()
+        ) { [self] arguments in
+            let decoded: GetPostArguments = try Self.decode(arguments, as: GetPostArguments.self)
+            let payload = try toolResponses.getPost(arguments: decoded)
+            return try Self.makeJSONResult(from: payload)
         }
 
-        server.registerTool(
-            ToolDefinition(
-                name: "search_posts",
-                description: "Search Step Into Vision posts by keyword.",
-                inputSchema: .object(
-                    properties: [
-                        "query": .string(minLength: 2),
-                        "limit": .integer(minimum: 1, maximum: 20, defaultValue: 10),
-                        "offset": .integer(minimum: 0, defaultValue: 0),
-                        "include_html": .boolean(defaultValue: false)
-                    ],
-                    required: ["query"],
-                    additionalProperties: false
-                )
-            )
-        ) { [self] invocation in
-            try self.handleSearchPosts(invocation: invocation)
+        registerTool(
+            name: "search_posts",
+            description: "Search Step Into Vision posts by keyword.",
+            inputSchema: searchPostsSchema()
+        ) { [self] arguments in
+            let decoded: SearchPostsArguments = try Self.decode(arguments, as: SearchPostsArguments.self)
+            let payload = try toolResponses.searchPosts(arguments: decoded)
+            return try Self.makeJSONResult(from: payload)
         }
     }
 
-    private func handleListPosts(invocation: ToolInvocation) throws -> ToolResult {
-        let arguments = try invocation.arguments.decode(ListPostsArguments.self)
-        let payload = try toolResponses.listPosts(arguments: arguments)
-        return .success([.json(payload)])
+    private func registerTool(
+        name: String,
+        description: String,
+        inputSchema: Value,
+        annotations: MCP.Tool.Annotations = MCP.Tool.Annotations(
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: false
+        ),
+        handler: @escaping @Sendable ([String: Value]?) async throws -> MCP.CallTool.Result
+    ) {
+        let definition = MCP.Tool(
+            name: name,
+            description: description,
+            inputSchema: inputSchema,
+            annotations: annotations
+        )
+        tools[name] = ToolRegistration(definition: definition, handler: handler)
     }
 
-    private func handleGetPost(invocation: ToolInvocation) throws -> ToolResult {
-        let arguments = try invocation.arguments.decode(GetPostArguments.self)
-        let payload = try toolResponses.getPost(arguments: arguments)
-        return .success([.json(payload)])
+    private static func decode<T: Decodable>(_ arguments: [String: Value]?, as type: T.Type) throws -> T {
+        let container = arguments ?? [:]
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(container)
+        let decoder = JSONDecoder()
+        return try decoder.decode(T.self, from: data)
     }
 
-    private func handleSearchPosts(invocation: ToolInvocation) throws -> ToolResult {
-        let arguments = try invocation.arguments.decode(SearchPostsArguments.self)
-        let payload = try toolResponses.searchPosts(arguments: arguments)
-        return .success([.json(payload)])
+    private static func makeJSONResult(from payload: [String: Any]) throws -> MCP.CallTool.Result {
+        let (data, text) = try encodePayload(payload)
+        let dataURI = "data:application/json;base64,\(data.base64EncodedString())"
+        let content: [MCP.Tool.Content] = [
+            .text(text),
+            .resource(uri: dataURI, mimeType: "application/json", text: text)
+        ]
+        return MCP.CallTool.Result(content: content)
+    }
+
+    private static func encodePayload(_ payload: [String: Any]) throws -> (Data, String) {
+        guard JSONSerialization.isValidJSONObject(payload) else {
+            throw MCPError.internalError("Tool payload could not be encoded as JSON")
+        }
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw MCPError.internalError("Tool payload was not valid UTF-8")
+        }
+        return (data, text)
+    }
+
+    private func listPostsSchema() -> Value {
+        makeObjectSchema(
+            properties: [
+                "limit": integerSchema(minimum: 1, maximum: 50, defaultValue: 10, description: "Maximum number of posts to return."),
+                "offset": integerSchema(minimum: 0, defaultValue: 0, description: "Number of posts to skip before starting the list."),
+                "category_slug": stringSchema(description: "Filter results to a specific category slug."),
+                "tag_slug": stringSchema(description: "Filter results to a specific tag slug.")
+            ],
+            additionalProperties: false
+        )
+    }
+
+    private func getPostSchema() -> Value {
+        makeObjectSchema(
+            properties: [
+                "slug": stringSchema(),
+                "post_id": integerSchema(),
+                "include_html": booleanSchema(defaultValue: false),
+                "include_text": booleanSchema(defaultValue: true)
+            ],
+            additionalProperties: false
+        )
+    }
+
+    private func searchPostsSchema() -> Value {
+        makeObjectSchema(
+            properties: [
+                "query": stringSchema(minLength: 2, description: "Keywords to search for."),
+                "limit": integerSchema(minimum: 1, maximum: 20, defaultValue: 10),
+                "offset": integerSchema(minimum: 0, defaultValue: 0),
+                "include_html": booleanSchema(defaultValue: false)
+            ],
+            required: ["query"],
+            additionalProperties: false
+        )
+    }
+
+    private func makeObjectSchema(
+        properties: [String: Value],
+        required: [String] = [],
+        additionalProperties: Bool = false
+    ) -> Value {
+        var schema: [String: Value] = [
+            "type": .string("object"),
+            "properties": .object(properties),
+            "additionalProperties": .bool(additionalProperties)
+        ]
+        if !required.isEmpty {
+            schema["required"] = .array(required.map { .string($0) })
+        }
+        return .object(schema)
+    }
+
+    private func integerSchema(
+        minimum: Int? = nil,
+        maximum: Int? = nil,
+        defaultValue: Int? = nil,
+        description: String? = nil
+    ) -> Value {
+        var schema: [String: Value] = ["type": .string("integer")]
+        if let minimum { schema["minimum"] = .int(minimum) }
+        if let maximum { schema["maximum"] = .int(maximum) }
+        if let defaultValue { schema["default"] = .int(defaultValue) }
+        if let description { schema["description"] = .string(description) }
+        return .object(schema)
+    }
+
+    private func stringSchema(
+        minLength: Int? = nil,
+        description: String? = nil
+    ) -> Value {
+        var schema: [String: Value] = ["type": .string("string")]
+        if let minLength { schema["minLength"] = .int(minLength) }
+        if let description { schema["description"] = .string(description) }
+        return .object(schema)
+    }
+
+    private func booleanSchema(
+        defaultValue: Bool? = nil,
+        description: String? = nil
+    ) -> Value {
+        var schema: [String: Value] = ["type": .string("boolean")]
+        if let defaultValue { schema["default"] = .bool(defaultValue) }
+        if let description { schema["description"] = .string(description) }
+        return .object(schema)
+    }
+
+    // Internal hooks for unit tests to verify tool registration without spinning up the transport.
+    func toolDefinitionsForTesting() -> [MCP.Tool] {
+        tools.values.map(\.definition).sorted { $0.name < $1.name }
+    }
+
+    func callToolForTesting(name: String, arguments: [String: Value]?) async throws -> MCP.CallTool.Result {
+        guard let registration = tools[name] else {
+            throw MCPError.methodNotFound("Unknown tool: \(name)")
+        }
+        return try await registration.handler(arguments)
     }
 }
 
