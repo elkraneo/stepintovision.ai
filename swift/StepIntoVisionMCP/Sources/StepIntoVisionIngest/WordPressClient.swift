@@ -79,6 +79,19 @@ struct WordPressClient {
 private struct WordPressPost: Decodable {
     struct RenderedText: Decodable {
         let rendered: String
+
+        init(rendered: String) {
+            self.rendered = rendered
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.rendered = try container.decodeIfPresent(String.self, forKey: .rendered) ?? ""
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case rendered
+        }
     }
 
     struct EmbeddedAuthor: Decodable {
@@ -116,7 +129,7 @@ private struct WordPressPost: Decodable {
     let title: RenderedText
     let content: RenderedText
     let excerpt: RenderedText
-    let author: Int
+    let author: Int?
     let guid: RenderedText
     let embedded: EmbeddedData?
 
@@ -124,6 +137,8 @@ private struct WordPressPost: Decodable {
         case id
         case dateGmt = "date_gmt"
         case modifiedGmt = "modified_gmt"
+        case date
+        case modified
         case slug
         case link
         case title
@@ -132,6 +147,87 @@ private struct WordPressPost: Decodable {
         case author
         case guid
         case embedded = "_embedded"
+    }
+
+    private static func parseDateString(_ raw: String) -> Date? {
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let first = fractionalFormatter.date(from: raw) {
+            return first
+        }
+
+        let fallbackFormatter = ISO8601DateFormatter()
+        fallbackFormatter.formatOptions = [.withInternetDateTime]
+        if let date = fallbackFormatter.date(from: raw) {
+            return date
+        }
+
+        if !raw.contains("Z") && !raw.contains("+") {
+            let suffixed = raw + "Z"
+            if let date = fractionalFormatter.date(from: suffixed) {
+                return date
+            }
+            if let date = fallbackFormatter.date(from: suffixed) {
+                return date
+            }
+        }
+
+        let posixFormatter = DateFormatter()
+        posixFormatter.locale = Locale(identifier: "en_US_POSIX")
+        posixFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        posixFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        if let parsed = posixFormatter.date(from: raw) {
+            return parsed
+        }
+
+        if !raw.contains("Z") && !raw.contains("+") {
+            return posixFormatter.date(from: raw + "Z")
+        }
+
+        return nil
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        func decodeDate(forKey key: CodingKeys, fallbackKey: CodingKeys) throws -> Date {
+            if let raw = try container.decodeIfPresent(String.self, forKey: key) {
+                if let parsed = Self.parseDateString(raw) {
+                    return parsed
+                }
+            }
+
+            if let fallbackRaw = try container.decodeIfPresent(String.self, forKey: fallbackKey) {
+                if let parsed = Self.parseDateString(fallbackRaw) {
+                    return parsed
+                }
+            }
+
+            throw DecodingError.dataCorruptedError(
+                forKey: key,
+                in: container,
+                debugDescription: "Expected ISO8601 date for \(key) or \(fallbackKey)"
+            )
+        }
+
+        func decodeRenderedText(forKey key: CodingKeys) throws -> RenderedText {
+            if let value = try container.decodeIfPresent(RenderedText.self, forKey: key) {
+                return value
+            }
+            return RenderedText(rendered: "")
+        }
+
+        self.id = try container.decode(Int.self, forKey: .id)
+        self.slug = try container.decode(String.self, forKey: .slug)
+        self.link = try container.decode(String.self, forKey: .link)
+        self.title = try decodeRenderedText(forKey: .title)
+        self.content = try decodeRenderedText(forKey: .content)
+        self.excerpt = try decodeRenderedText(forKey: .excerpt)
+        self.author = try container.decodeIfPresent(Int.self, forKey: .author)
+        self.guid = try decodeRenderedText(forKey: .guid)
+        self.embedded = try container.decodeIfPresent(EmbeddedData.self, forKey: .embedded)
+        self.dateGmt = try decodeDate(forKey: .dateGmt, fallbackKey: .date)
+        self.modifiedGmt = try decodeDate(forKey: .modifiedGmt, fallbackKey: .modified)
     }
 
     func toRecord() -> PostRecord {
@@ -168,7 +264,7 @@ private struct WordPressPost: Decodable {
             contentHTML: content.rendered,
             link: link,
             guid: guid.rendered,
-            authorID: authorInfo?.id,
+            authorID: authorInfo?.id ?? author,
             authorName: authorInfo?.name,
             authorSlug: authorInfo?.slug,
             authorURL: authorInfo?.url,

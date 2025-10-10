@@ -57,19 +57,15 @@ Companion's "Add Server" sheet can launch STDIO MCP binaries directly:
 
 1. Click the <kbd>+</kbd> button, choose **STDIO**, and set **Command** to
    `/path/to/swift/StepIntoVisionMCP/.build/release/stepintovision-mcp`.
-2. Add two arguments: `--db` and `/path/to/stepintovision.ai/data/stepinto.db`.
+2. In the **Arguments** table, add two rows: `--db` and
+   `/path/to/stepintovision.ai/data/stepinto.db`. Companion passes each row as a separate
+   argument, so leave commas out.
 3. Save to connect. The tools list should populate with `list_posts`, `get_post`, and
    `search_posts` right away.
 
-If you prefer the Companion CLI, use the equivalent invocation:
-
-```bash
-companion --server-command /path/to/swift/StepIntoVisionMCP/.build/release/stepintovision-mcp \
-  --server-argument --db \
-  --server-argument /path/to/stepintovision.ai/data/stepinto.db
-```
-
-Run `tools` in the CLI session to confirm registration before calling into the MCP server.
+_The Companion CLI does not yet expose the STDIO configuration flags needed for this server.
+Track updates in the [Companion repository](https://github.com/mattt/Companion) if you prefer
+the CLI workflow._
 
 ## Testing
 

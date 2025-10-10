@@ -52,16 +52,10 @@ The Swift tooling is self-contained: it ingests the Step Into Vision WordPress f
 
      1. Open Companion, click the <kbd>+</kbd> button, and pick **STDIO**.
      2. Set **Command** to `/path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepintovision-mcp`.
-     3. Add the arguments `--db` and `/path/to/stepintovision.ai/data/stepinto.db` in the arguments list.
+     3. Use the **Arguments** table to add two separate entries: first `--db`, then `/path/to/stepintovision.ai/data/stepinto.db`. (Do not comma-separate them—Companion passes each row as a distinct process argument.)
      4. Save. Companion should connect immediately and list `list_posts`, `get_post`, and `search_posts`. Use the in-app **Tools** view to verify registration before calling them.
 
-     To configure the same server from the Companion CLI instead of the GUI, run:
-
-     ```bash
-     companion --server-command /path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepintovision-mcp \
-       --server-argument --db \
-       --server-argument /path/to/stepintovision.ai/data/stepinto.db
-     ```
+     _Companion's command-line interface does not yet expose flags for configuring STDIO servers. Use the macOS/iOS app to add the server, or keep an eye on the [upstream README](https://github.com/mattt/Companion) for CLI support updates._
 
 5. **Run the Swift tests whenever you touch the core library**
 
