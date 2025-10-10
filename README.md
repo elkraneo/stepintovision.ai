@@ -1,69 +1,67 @@
 # Step Into Vision MCP
 ![Terminal window showing Codex analysis output summarizing ornament coverage across Step Into Vision labs.](./assets/example-codex-query-ornaments-output.png "Codex ornament query output")
 
-This repository packages two pieces that work together:
-
-- **`stepintovision_ingest`** – pulls published content from the Step Into Vision blog via the public WordPress REST API and stores it locally.
-- **`stepintovision_mcp`** – exposes that stored content through a [Model Context Protocol](https://modelcontextprotocol.io/) server built on [`FastMCP`](https://github.com/jlowin/fastmcp).
-
-The goal is to let anyone ingest the Step Into Vision catalog and connect it to an MCP-aware client (Claude Desktop, Cursor, etc.).
+This repository packages a Swift-first toolchain for exploring Step Into Vision content. Everything you need to ingest data and serve it over the Model Context Protocol lives in the Swift package so you can stay in one toolchain from start to finish.
 
 ## Requirements
 
-- Python 3.11 or newer
-- A package installer (`uv` is recommended, but `pip` works as well)
+- Swift 6.1 (available via Xcode 16 or the Swift 6 toolchains)
 
 ## Repository Layout
 
-- `stepintovision_ingest/` – ingestion client, models, and storage helpers
-- `stepintovision_mcp/` – MCP tool definitions and CLI entry point (`stepinto-mcp`)
+- `swift/StepIntoVisionMCP/` – Swift-only ingestion + MCP server built on the official Model Context Protocol Swift SDK and sqlite-data
 - `data/` – empty folder kept for your local SQLite database (ignored by git)
-- `pyproject.toml` – package metadata and dependencies
 
-## Getting Started
+## Swift Quick Start
 
-Follow the numbered steps below or run `./scripts/setup.sh` to automate steps 1–3.
+The Swift tooling is self-contained: it ingests the Step Into Vision WordPress feed, stores it with sqlite-data, and serves the tools over STDIO.
 
-1. **Use Python 3.11+**
-
-   ```bash
-   python3 --version  # should report 3.11 or newer
-   ```
-
-   If your default `python3` is older, install 3.11 (e.g., via `uv python install 3.11` or `pyenv`) and set `PYTHON_BIN=python3.11` for later commands.
-
-2. **Install the project**
+1. **Build (or fetch dependencies)**
 
    ```bash
-   uv pip install .
+   swift build --package-path swift/StepIntoVisionMCP
    ```
 
-   Without `uv`, run `python3.11 -m pip install .` (or pass the interpreter you set in step 1). This installs both packages and the `stepinto-mcp` CLI.
-
-3. **Ingest the Step Into Vision catalog**
+2. **Ingest the Step Into Vision catalog**
 
    ```bash
-   python3 -m stepintovision_ingest.ingest --db data/stepinto.db
+   swift run --package-path swift/StepIntoVisionMCP stepintovision-ingest --db data/stepinto.db
    ```
 
-   Use `--help` to see flags for page size, API base URL, or incremental fetches via `--modified-after`.
+   Use `--help` for options such as `--base-url`, `--per-page`, or incremental syncs with `--modified-after`.
 
-4. **Expose the tools to an MCP client**
-
-   The ingestion step writes `data/stepinto.db`, which is ignored by git so everyone brings their own copy. Point the server at that file:
+3. **Serve the MCP tools over STDIO**
 
    ```bash
-   STEPINTOVISION_DB=./data/stepinto.db stepinto-mcp
+   swift run --package-path swift/StepIntoVisionMCP stepintovision-mcp --db data/stepinto.db
    ```
 
-   The default transport is stdio, which is what most MCP clients expect. To host it over HTTP/SSE:
+   Add `--verbose` to watch requests stream by.
+
+4. **Connect from an MCP client**
+
+   - **`gpt5-codex`** `config.toml` example:
+
+     ```toml
+     [mcp_servers.StepIntoVision]
+     command = "/path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepintovision-mcp"
+     args    = ["--db", "/path/to/stepintovision.ai/data/stepinto.db"]
+     ```
+
+   - **`Companion`** (app):
+
+     1. Open Companion, click the <kbd>+</kbd> button, and pick **STDIO**.
+     2. Set **Command** to `/path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepintovision-mcp`.
+     3. Use the **Arguments** table to add two separate entries: first `--db`, then `/path/to/stepintovision.ai/data/stepinto.db`. (Do not comma-separate them—Companion passes each row as a distinct process argument.)
+     4. Save. Companion should connect immediately and list `list_posts`, `get_post`, and `search_posts`. Use the in-app **Tools** view to verify registration before calling them.
+
+     _Companion's command-line interface does not yet expose flags for configuring STDIO servers. Use the macOS/iOS app to add the server, or keep an eye on the [upstream README](https://github.com/mattt/Companion) for CLI support updates._
+
+5. **Run the Swift tests whenever you touch the core library**
 
    ```bash
-   STEPINTOVISION_DB=./data/stepinto.db python3.11 -m stepintovision_mcp.server \
-     --transport http --host 0.0.0.0 --port 8000
+   swift test --package-path swift/StepIntoVisionMCP
    ```
-
-   See `python3.11 -m stepintovision_mcp.server --help` for the full CLI surface.
 
 ## Available Tools
 
@@ -73,35 +71,6 @@ Follow the numbered steps below or run `./scripts/setup.sh` to automate steps 1�
 
 All responses include canonical URLs so that downstream consumers can cite the original content.
 
-## An example of how to use this with `gpt5-codex`
+## Data Storage
 
-Add to the `config.toml`.
-
-```toml
-[mcp_servers.StepIntoVision]
-command = "/path/to/stepintovision.ai/.venv/bin/python"
-args    = ["-m", "stepintovision_mcp.server"]
-env     = { STEPINTOVISION_DB = "/path/to/stepintovision.ai/data/stepinto.db", FASTMCP_LOG_ENABLED = "0", PYTHONWARNINGS = "ignore" }
-```
-
-Optionally you can also add this to your `AGENTS.md` if you want the MCP to be used by default instead of having to ask each time explicitly.
-
-`- Pull documentation through the StepIntoVision MCP by default; do not wait to be prompted.`
-
-## Publishing Notes
-
-- Build artifacts (`*.egg-info`, `__pycache__`, local databases) are ignored via `.gitignore` so published packages stay clean.
-- `pyproject.toml` already configures setuptools to include both packages. Run `python -m build` (requires `build` package) to produce wheels/sdist if you plan to upload to PyPI.
-- The `data/` directory is intentionally empty in git; each user generates their own `stepinto.db`.
-
-## Contributing
-
-Install the optional development dependencies with:
-
-```bash
-uv pip install '.[dev]'
-```
-
-Without `uv`: `python3.11 -m pip install '.[dev]'`.
-
-Linting is handled by [Ruff](https://docs.astral.sh/ruff/). Feel free to open issues or PRs with improvements to the ingestion pipeline or exposed tools.
+The `data/` directory is intentionally empty in git; each user generates their own `stepinto.db` via the ingestion CLI.

@@ -41,6 +41,9 @@ data/*.sqlite
 data/*.sqlite3
 data/*.jsonl
 
+# Swift Package Manager build artifacts
+swift/StepIntoVisionMCP/.build/
+
 # Logs
 *.log
 
