@@ -4,8 +4,6 @@ import MCP
 import Logging
 #if canImport(UIKit)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
 #endif
 
 // MARK: - Logging
@@ -524,7 +522,7 @@ private func iso8601Date(from string: String, includesFractional: Bool) -> Date?
 }
 
 private func htmlToText(_ html: String) -> String {
-#if canImport(UIKit) || canImport(AppKit)
+#if canImport(UIKit)
     guard let data = html.data(using: .utf8) else { return html }
     let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
         .documentType: NSAttributedString.DocumentType.html,
