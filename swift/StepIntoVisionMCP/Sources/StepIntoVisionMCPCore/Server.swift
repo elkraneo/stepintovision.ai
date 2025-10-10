@@ -1,10 +1,8 @@
 import Foundation
-import SQLite3
-import MCP
 import Logging
-#if canImport(UIKit)
-import UIKit
-#endif
+import MCP
+import GRDB
+import SQLiteData
 
 // MARK: - Logging
 
@@ -42,13 +40,29 @@ public struct Logger: Sendable {
 
 // MARK: - Models
 
-struct TermRecord: Hashable, Codable {
+public struct TermRecord: Hashable, Codable, Sendable {
     let id: Int
     let slug: String
     let name: String
     let taxonomy: String
     let link: String?
     let description: String?
+
+    public init(
+        id: Int,
+        slug: String,
+        name: String,
+        taxonomy: String,
+        link: String?,
+        description: String?
+    ) {
+        self.id = id
+        self.slug = slug
+        self.name = name
+        self.taxonomy = taxonomy
+        self.link = link
+        self.description = description
+    }
 
     func toJSON() -> [String: Any] {
         var payload: [String: Any] = [
@@ -63,7 +77,7 @@ struct TermRecord: Hashable, Codable {
     }
 }
 
-struct PostRecord: Codable {
+public struct PostRecord: Codable, Sendable {
     let id: Int
     let slug: String
     let title: String
@@ -84,19 +98,63 @@ struct PostRecord: Codable {
     let categories: [TermRecord]
     let tags: [TermRecord]
 
+    var allTerms: [TermRecord] { categories + tags }
+
+    public init(
+        id: Int,
+        slug: String,
+        title: String,
+        titleHTML: String,
+        excerpt: String,
+        excerptHTML: String,
+        contentHTML: String,
+        link: String,
+        guid: String,
+        authorID: Int?,
+        authorName: String?,
+        authorSlug: String?,
+        authorURL: String?,
+        publishedAt: Date,
+        modifiedAt: Date,
+        featuredMediaURL: String?,
+        featuredMediaAltText: String?,
+        categories: [TermRecord],
+        tags: [TermRecord]
+    ) {
+        self.id = id
+        self.slug = slug
+        self.title = title
+        self.titleHTML = titleHTML
+        self.excerpt = excerpt
+        self.excerptHTML = excerptHTML
+        self.contentHTML = contentHTML
+        self.link = link
+        self.guid = guid
+        self.authorID = authorID
+        self.authorName = authorName
+        self.authorSlug = authorSlug
+        self.authorURL = authorURL
+        self.publishedAt = publishedAt
+        self.modifiedAt = modifiedAt
+        self.featuredMediaURL = featuredMediaURL
+        self.featuredMediaAltText = featuredMediaAltText
+        self.categories = categories
+        self.tags = tags
+    }
+
     func summary() -> PostSummary {
-        let textExcerpt: String
+        let excerptText: String
         if excerpt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let fallback = htmlToText(contentHTML)
-            textExcerpt = String(fallback.prefix(400))
+            excerptText = String(normalizeWhitespace(htmlToText(contentHTML)).prefix(400))
         } else {
-            textExcerpt = excerpt
+            excerptText = excerpt
         }
+
         return PostSummary(
             id: id,
             slug: slug,
             title: title,
-            excerpt: textExcerpt,
+            excerpt: excerptText,
             link: link,
             publishedAt: publishedAt,
             categories: categories,
@@ -107,8 +165,8 @@ struct PostRecord: Codable {
 
     func toJSON(includeHTML: Bool, includeText: Bool) -> [String: Any] {
         var payload = summary().toJSON()
-        payload.updateValue(guid, forKey: "guid")
-        payload.updateValue(iso8601String(from: modifiedAt), forKey: "modified_at")
+        payload["guid"] = guid
+        payload["modified_at"] = iso8601String(from: modifiedAt)
         if let authorSlug { payload["author_slug"] = authorSlug }
         if let authorID { payload["author_id"] = authorID }
         if let authorURL { payload["author_url"] = authorURL }
@@ -124,7 +182,7 @@ struct PostRecord: Codable {
     }
 }
 
-struct PostSummary {
+public struct PostSummary: Sendable {
     let id: Int
     let slug: String
     let title: String
@@ -134,6 +192,28 @@ struct PostSummary {
     let categories: [TermRecord]
     let tags: [TermRecord]
     let authorName: String?
+
+    public init(
+        id: Int,
+        slug: String,
+        title: String,
+        excerpt: String,
+        link: String,
+        publishedAt: Date,
+        categories: [TermRecord],
+        tags: [TermRecord],
+        authorName: String?
+    ) {
+        self.id = id
+        self.slug = slug
+        self.title = title
+        self.excerpt = excerpt
+        self.link = link
+        self.publishedAt = publishedAt
+        self.categories = categories
+        self.tags = tags
+        self.authorName = authorName
+    }
 
     func toJSON() -> [String: Any] {
         var payload: [String: Any] = [
@@ -146,410 +226,416 @@ struct PostSummary {
             "categories": categories.map { $0.toJSON() },
             "tags": tags.map { $0.toJSON() }
         ]
-        if let authorName {
-            payload["author"] = authorName
-        }
+        if let authorName { payload["author"] = authorName }
         return payload
     }
+
 }
 
 // MARK: - Content Database
 
-enum ContentDatabaseError: Error {
+public enum ContentDatabaseError: Error {
     case sqliteError(String)
     case notFound
 }
 
-public final class ContentDatabase {
-    private let path: String
+public final class ContentDatabase: @unchecked Sendable {
+    public enum Mode {
+        case readOnly
+        case readWrite
+    }
+
+    private let queue: DatabaseQueue
     private let logger: Logger
+    private let mode: Mode
 
-    public init(path: String, logger: Logger = Logger(isVerbose: false)) throws {
-        self.path = path
+    public init(path: String, mode: Mode = .readOnly, logger: Logger) throws {
         self.logger = logger
-        try checkDatabaseExists()
-    }
-
-    private func checkDatabaseExists() throws {
-        if !FileManager.default.fileExists(atPath: path) {
-            throw ContentDatabaseError.sqliteError("Database not found at \(path)")
+        self.mode = mode
+        var configuration = Configuration()
+        configuration.readonly = mode == .readOnly
+        configuration.prepareDatabase { db in
+            try db.execute(sql: "PRAGMA foreign_keys = ON")
+        }
+        if mode == .readWrite {
+            let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
+            if !directory.path.isEmpty {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            }
+        }
+        do {
+            self.queue = try DatabaseQueue(path: path, configuration: configuration)
+        } catch {
+            throw ContentDatabaseError.sqliteError(error.localizedDescription)
         }
     }
 
-    private func connect() throws -> OpaquePointer? {
-        var handle: OpaquePointer?
-        let flags = SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX
-        if sqlite3_open_v2(path, &handle, flags, nil) != SQLITE_OK {
-            let message = handle.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? "Unknown error"
-            throw ContentDatabaseError.sqliteError("Unable to open database: \(message)")
+    public func initializeSchema() throws {
+        var migrator = DatabaseMigrator()
+        if mode == .readWrite {
+            do {
+                try queue.inDatabase { db in
+                    try db.execute(sql: "PRAGMA journal_mode=WAL")
+                }
+            } catch {
+                throw ContentDatabaseError.sqliteError(error.localizedDescription)
+            }
         }
-        return handle
+
+        migrator.registerMigration("stepintovision.initial") { db in
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS meta (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+            """)
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS posts (
+                    id INTEGER PRIMARY KEY,
+                    slug TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    title_html TEXT NOT NULL,
+                    excerpt TEXT,
+                    excerpt_html TEXT,
+                    content_html TEXT NOT NULL,
+                    link TEXT NOT NULL,
+                    guid TEXT NOT NULL,
+                    author_id INTEGER,
+                    author_name TEXT,
+                    author_slug TEXT,
+                    author_url TEXT,
+                    published_at TEXT NOT NULL,
+                    modified_at TEXT NOT NULL,
+                    featured_media_url TEXT,
+                    featured_media_alt_text TEXT,
+                    fetched_at TEXT NOT NULL
+                );
+            """)
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS terms (
+                    id INTEGER PRIMARY KEY,
+                    slug TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    taxonomy TEXT NOT NULL,
+                    link TEXT,
+                    description TEXT
+                );
+            """)
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS post_terms (
+                    post_id INTEGER NOT NULL,
+                    term_id INTEGER NOT NULL,
+                    PRIMARY KEY (post_id, term_id),
+                    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+                    FOREIGN KEY (term_id) REFERENCES terms(id) ON DELETE CASCADE
+                );
+            """)
+            try db.execute(sql: "INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '1')")
+        }
+        try migrator.migrate(queue)
     }
 
-    func listPosts(limit: Int, offset: Int, categorySlug: String?, tagSlug: String?) throws -> [PostRecord] {
+    public func upsert(posts: [PostRecord]) throws {
+        guard !posts.isEmpty else { return }
+        let fetchedAt = iso8601String(from: Date())
+        do {
+            try queue.write { db in
+                for post in posts {
+                    try self.persist(post: post, fetchedAt: fetchedAt, db: db)
+                }
+            }
+        } catch {
+            throw ContentDatabaseError.sqliteError(error.localizedDescription)
+        }
+    }
+
+    public func listPosts(
+        limit: Int,
+        offset: Int,
+        categorySlug: String?,
+        tagSlug: String?
+    ) throws -> [PostRecord] {
+        do {
+            return try queue.read { db in
+                let (sql, arguments) = Self.listPostsSQL(
+                    limit: limit,
+                    offset: offset,
+                    categorySlug: categorySlug,
+                    tagSlug: tagSlug
+                )
+                let rows = try Row.fetchAll(db, sql: sql, arguments: arguments)
+                let termMap = try self.loadTerms(db: db, for: rows.map { $0["id"] as Int })
+                return try rows.map { try self.makePost(from: $0, termBuckets: termMap[$0["id"] as Int] ?? TermBuckets()) }
+            }
+        } catch let error as ContentDatabaseError {
+            throw error
+        } catch {
+            throw ContentDatabaseError.sqliteError(error.localizedDescription)
+        }
+    }
+
+    public func getPost(postID: Int?, slug: String?) throws -> PostRecord? {
+        do {
+            return try queue.read { db in
+                if let postID {
+                    guard let row = try Row.fetchOne(db, sql: "SELECT * FROM posts WHERE id = ?", arguments: [postID]) else {
+                        return nil
+                    }
+                    let termMap = try self.loadTerms(db: db, for: [postID])
+                    return try self.makePost(from: row, termBuckets: termMap[postID] ?? TermBuckets())
+                }
+
+                if let slug {
+                    guard let row = try Row.fetchOne(db, sql: "SELECT * FROM posts WHERE slug = ?", arguments: [slug]) else {
+                        return nil
+                    }
+                    let postID = row["id"] as Int
+                    let termMap = try self.loadTerms(db: db, for: [postID])
+                    return try self.makePost(from: row, termBuckets: termMap[postID] ?? TermBuckets())
+                }
+
+                return nil
+            }
+        } catch let error as ContentDatabaseError {
+            throw error
+        } catch {
+            throw ContentDatabaseError.sqliteError(error.localizedDescription)
+        }
+    }
+
+    public func searchPosts(query: String, limit: Int, offset: Int) throws -> [PostRecord] {
+        let like = "%\(query)%"
+        do {
+            return try queue.read { db in
+                let rows = try Row.fetchAll(
+                    db,
+                    sql: """
+                        SELECT DISTINCT posts.*
+                        FROM posts
+                        LEFT JOIN post_terms pt ON pt.post_id = posts.id
+                        LEFT JOIN terms t ON t.id = pt.term_id
+                        WHERE posts.title LIKE ?
+                           OR posts.excerpt LIKE ?
+                           OR posts.content_html LIKE ?
+                           OR t.name LIKE ?
+                        ORDER BY datetime(posts.published_at) DESC
+                        LIMIT ? OFFSET ?
+                    """,
+                    arguments: [like, like, like, like, limit, offset]
+                )
+                let ids = rows.map { $0["id"] as Int }
+                let termMap = try self.loadTerms(db: db, for: ids)
+                return try rows.map { try self.makePost(from: $0, termBuckets: termMap[$0["id"] as Int] ?? TermBuckets()) }
+            }
+        } catch let error as ContentDatabaseError {
+            throw error
+        } catch {
+            throw ContentDatabaseError.sqliteError(error.localizedDescription)
+        }
+    }
+
+    private func persist(post: PostRecord, fetchedAt: String, db: Database) throws {
+        try db.execute(
+            sql: """
+                INSERT INTO posts (
+                    id, slug, title, title_html, excerpt, excerpt_html, content_html, link, guid,
+                    author_id, author_name, author_slug, author_url,
+                    published_at, modified_at, featured_media_url, featured_media_alt_text, fetched_at
+                ) VALUES (
+                    :id, :slug, :title, :title_html, :excerpt, :excerpt_html, :content_html, :link, :guid,
+                    :author_id, :author_name, :author_slug, :author_url,
+                    :published_at, :modified_at, :featured_media_url, :featured_media_alt_text, :fetched_at
+                )
+                ON CONFLICT(id) DO UPDATE SET
+                    slug = excluded.slug,
+                    title = excluded.title,
+                    title_html = excluded.title_html,
+                    excerpt = excluded.excerpt,
+                    excerpt_html = excluded.excerpt_html,
+                    content_html = excluded.content_html,
+                    link = excluded.link,
+                    guid = excluded.guid,
+                    author_id = excluded.author_id,
+                    author_name = excluded.author_name,
+                    author_slug = excluded.author_slug,
+                    author_url = excluded.author_url,
+                    published_at = excluded.published_at,
+                    modified_at = excluded.modified_at,
+                    featured_media_url = excluded.featured_media_url,
+                    featured_media_alt_text = excluded.featured_media_alt_text,
+                    fetched_at = excluded.fetched_at
+            """,
+            arguments: [
+                "id": post.id,
+                "slug": post.slug,
+                "title": post.title,
+                "title_html": post.titleHTML,
+                "excerpt": post.excerpt,
+                "excerpt_html": post.excerptHTML,
+                "content_html": post.contentHTML,
+                "link": post.link,
+                "guid": post.guid,
+                "author_id": post.authorID,
+                "author_name": post.authorName,
+                "author_slug": post.authorSlug,
+                "author_url": post.authorURL,
+                "published_at": iso8601String(from: post.publishedAt),
+                "modified_at": iso8601String(from: post.modifiedAt),
+                "featured_media_url": post.featuredMediaURL,
+                "featured_media_alt_text": post.featuredMediaAltText,
+                "fetched_at": fetchedAt
+            ]
+        )
+
+        try db.execute(sql: "DELETE FROM post_terms WHERE post_id = ?", arguments: [post.id])
+        for term in post.allTerms {
+            try upsert(term: term, db: db)
+            try db.execute(
+                sql: "INSERT OR IGNORE INTO post_terms (post_id, term_id) VALUES (?, ?)",
+                arguments: [post.id, term.id]
+            )
+        }
+    }
+
+    private func upsert(term: TermRecord, db: Database) throws {
+        try db.execute(
+            sql: """
+                INSERT INTO terms (id, slug, name, taxonomy, link, description)
+                VALUES (:id, :slug, :name, :taxonomy, :link, :description)
+                ON CONFLICT(id) DO UPDATE SET
+                    slug = excluded.slug,
+                    name = excluded.name,
+                    taxonomy = excluded.taxonomy,
+                    link = excluded.link,
+                    description = excluded.description
+            """,
+            arguments: [
+                "id": term.id,
+                "slug": term.slug,
+                "name": term.name,
+                "taxonomy": term.taxonomy,
+                "link": term.link,
+                "description": term.description
+            ]
+        )
+    }
+
+    private func loadTerms(db: Database, for ids: [Int]) throws -> [Int: TermBuckets] {
+        guard !ids.isEmpty else { return [:] }
+        let placeholders = ids.map { _ in "?" }.joined(separator: ",")
+        let positional: [(any DatabaseValueConvertible)?] = ids.map { $0 }
+        let rows = try Row.fetchAll(
+            db,
+            sql: """
+                SELECT pt.post_id, t.id, t.slug, t.name, t.taxonomy, t.link, t.description
+                FROM post_terms pt
+                JOIN terms t ON t.id = pt.term_id
+                WHERE pt.post_id IN (\(placeholders))
+            """,
+            arguments: StatementArguments(positional)
+        )
+        var buckets: [Int: TermBuckets] = [:]
+        for row in rows {
+            let postID: Int = row["post_id"]
+            var current = buckets[postID] ?? TermBuckets()
+            let term = TermRecord(
+                id: row["id"],
+                slug: row["slug"],
+                name: row["name"],
+                taxonomy: row["taxonomy"],
+                link: row["link"],
+                description: row["description"]
+            )
+            switch term.taxonomy {
+            case "category": current.categories.append(term)
+            case "post_tag": current.tags.append(term)
+            default: current.tags.append(term)
+            }
+            buckets[postID] = current
+        }
+        return buckets
+    }
+
+    private func makePost(from row: Row, termBuckets: TermBuckets) throws -> PostRecord {
+        guard let publishedString: String = row["published_at"],
+              let modifiedString: String = row["modified_at"],
+              let publishedDate = parseISO8601Date(publishedString),
+              let modifiedDate = parseISO8601Date(modifiedString) else {
+            throw ContentDatabaseError.sqliteError("Invalid date encoding in database")
+        }
+
+        return PostRecord(
+            id: row["id"],
+            slug: row["slug"],
+            title: row["title"],
+            titleHTML: row["title_html"],
+            excerpt: row["excerpt"] ?? "",
+            excerptHTML: row["excerpt_html"] ?? "",
+            contentHTML: row["content_html"],
+            link: row["link"],
+            guid: row["guid"],
+            authorID: row["author_id"],
+            authorName: row["author_name"],
+            authorSlug: row["author_slug"],
+            authorURL: row["author_url"],
+            publishedAt: publishedDate,
+            modifiedAt: modifiedDate,
+            featuredMediaURL: row["featured_media_url"],
+            featuredMediaAltText: row["featured_media_alt_text"],
+            categories: termBuckets.categories,
+            tags: termBuckets.tags
+        )
+    }
+
+    private static func listPostsSQL(
+        limit: Int,
+        offset: Int,
+        categorySlug: String?,
+        tagSlug: String?
+    ) -> (String, StatementArguments) {
+        var sql = "SELECT posts.* FROM posts"
         var clauses: [String] = []
-        var params: [SQLiteBinding] = []
+        var argumentStorage: [String: (any DatabaseValueConvertible)?] = [:]
         if let categorySlug {
-            clauses.append(
-                """
+            clauses.append("""
                 EXISTS (
                     SELECT 1 FROM post_terms pt
                     JOIN terms t ON t.id = pt.term_id
                     WHERE pt.post_id = posts.id
                       AND t.taxonomy = 'category'
-                      AND t.slug = ?
+                      AND t.slug = :category_slug
                 )
-                """
-            )
-            params.append(.text(categorySlug))
+            """)
+            argumentStorage["category_slug"] = categorySlug
         }
         if let tagSlug {
-            clauses.append(
-                """
+            clauses.append("""
                 EXISTS (
                     SELECT 1 FROM post_terms pt
                     JOIN terms t ON t.id = pt.term_id
                     WHERE pt.post_id = posts.id
                       AND t.taxonomy = 'post_tag'
-                      AND t.slug = ?
+                      AND t.slug = :tag_slug
                 )
-                """
-            )
-            params.append(.text(tagSlug))
+            """)
+            argumentStorage["tag_slug"] = tagSlug
         }
-
-        let whereClause = clauses.isEmpty ? "" : "WHERE " + clauses.joined(separator: " AND ")
-        let sql = """
-        SELECT posts.*
-        FROM posts
-        \(whereClause)
-        ORDER BY posts.published_at DESC
-        LIMIT ? OFFSET ?
-        """
-        params.append(.int(limit))
-        params.append(.int(offset))
-        return try fetchPosts(sql: sql, params: params)
-    }
-
-    func getPost(postID: Int?, slug: String?) throws -> PostRecord? {
-        guard postID != nil || slug != nil else {
-            throw ContentDatabaseError.sqliteError("Either post_id or slug must be provided")
+        if !clauses.isEmpty {
+            sql += " WHERE " + clauses.joined(separator: " AND ")
         }
-        let sql: String
-        var params: [SQLiteBinding]
-        if let postID {
-            sql = "SELECT * FROM posts WHERE id = ?"
-            params = [.int(postID)]
-        } else if let slug {
-            sql = "SELECT * FROM posts WHERE slug = ?"
-            params = [.text(slug)]
-        } else {
-            return nil
-        }
-        return try fetchPosts(sql: sql, params: params).first
-    }
-
-    func searchPosts(query: String, limit: Int, offset: Int) throws -> [PostRecord] {
-        let like = "%\(query)%"
-        let sql = """
-        SELECT DISTINCT posts.*
-        FROM posts
-        LEFT JOIN post_terms pt ON pt.post_id = posts.id
-        LEFT JOIN terms t ON t.id = pt.term_id
-        WHERE posts.title LIKE ?
-           OR posts.excerpt LIKE ?
-           OR posts.content_html LIKE ?
-           OR t.name LIKE ?
-        ORDER BY posts.published_at DESC
-        LIMIT ? OFFSET ?
-        """
-        let params: [SQLiteBinding] = [.text(like), .text(like), .text(like), .text(like), .int(limit), .int(offset)]
-        return try fetchPosts(sql: sql, params: params)
-    }
-
-    private func fetchPosts(sql: String, params: [SQLiteBinding]) throws -> [PostRecord] {
-        guard let db = try connect() else { return [] }
-        defer { sqlite3_close(db) }
-
-        let rows = try executeQuery(db: db, sql: sql, params: params)
-        let ids = rows.compactMap { $0.intValue(for: "id") }
-        let termMap = try fetchTerms(db: db, postIDs: ids)
-        return rows.compactMap { row in
-            guard let id = row.intValue(for: "id"),
-                  let slug = row.stringValue(for: "slug"),
-                  let title = row.stringValue(for: "title"),
-                  let titleHTML = row.stringValue(for: "title_html"),
-                  let contentHTML = row.stringValue(for: "content_html"),
-                  let link = row.stringValue(for: "link"),
-                  let guid = row.stringValue(for: "guid"),
-                  let published = row.dateValue(for: "published_at"),
-                  let modified = row.dateValue(for: "modified_at")
-            else {
-                logger.warn("Skipping malformed row for post")
-                return nil
-            }
-
-            let excerpt = row.stringValue(for: "excerpt") ?? ""
-            let excerptHTML = row.stringValue(for: "excerpt_html") ?? ""
-
-            let categories = termMap[id]?["category"] ?? []
-            let tags = termMap[id]?["post_tag"] ?? []
-            return PostRecord(
-                id: id,
-                slug: slug,
-                title: title,
-                titleHTML: titleHTML,
-                excerpt: excerpt,
-                excerptHTML: excerptHTML,
-                contentHTML: contentHTML,
-                link: link,
-                guid: guid,
-                authorID: row.optionalInt(for: "author_id"),
-                authorName: row.stringValue(for: "author_name"),
-                authorSlug: row.stringValue(for: "author_slug"),
-                authorURL: row.stringValue(for: "author_url"),
-                publishedAt: published,
-                modifiedAt: modified,
-                featuredMediaURL: row.stringValue(for: "featured_media_url"),
-                featuredMediaAltText: row.stringValue(for: "featured_media_alt_text"),
-                categories: categories,
-                tags: tags
-            )
-        }
-    }
-
-    private func fetchTerms(db: OpaquePointer?, postIDs: [Int]) throws -> [Int: [String: [TermRecord]]] {
-        guard !postIDs.isEmpty else { return [:] }
-        let placeholders = Array(repeating: "?", count: postIDs.count).joined(separator: ",")
-        let sql = """
-        SELECT pt.post_id, t.id, t.slug, t.name, t.taxonomy, t.link, t.description
-        FROM post_terms pt
-        JOIN terms t ON t.id = pt.term_id
-        WHERE pt.post_id IN (\(placeholders))
-        """
-        let params = postIDs.map(SQLiteBinding.int)
-        let rows = try executeQuery(db: db, sql: sql, params: params)
-        var mapping: [Int: [String: [TermRecord]]] = [:]
-        for row in rows {
-            guard let postID = row.intValue(for: "post_id"),
-                  let termID = row.intValue(for: "id"),
-                  let slug = row.stringValue(for: "slug"),
-                  let name = row.stringValue(for: "name"),
-                  let taxonomy = row.stringValue(for: "taxonomy")
-            else { continue }
-            let term = TermRecord(
-                id: termID,
-                slug: slug,
-                name: name,
-                taxonomy: taxonomy,
-                link: row.stringValue(for: "link"),
-                description: row.stringValue(for: "description")
-            )
-            var taxonomyTerms = mapping[postID] ?? [:]
-            var existing = taxonomyTerms[taxonomy] ?? []
-            existing.append(term)
-            taxonomyTerms[taxonomy] = existing
-            mapping[postID] = taxonomyTerms
-        }
-        return mapping
-    }
-
-    private func executeQuery(db: OpaquePointer?, sql: String, params: [SQLiteBinding]) throws -> [SQLiteRow] {
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-            let message = sqlite3_errmsg(db).map { String(cString: $0) } ?? "Unknown error"
-            throw ContentDatabaseError.sqliteError("Failed to prepare query: \(message)")
-        }
-        defer { sqlite3_finalize(statement) }
-
-        try bind(params, to: statement)
-
-        var rows: [SQLiteRow] = []
-        while true {
-            let step = sqlite3_step(statement)
-            if step == SQLITE_ROW {
-                rows.append(SQLiteRow(statement: statement))
-            } else if step == SQLITE_DONE {
-                break
-            } else {
-                let message = sqlite3_errmsg(db).map { String(cString: $0) } ?? "Unknown error"
-                throw ContentDatabaseError.sqliteError("SQLite step error: \(message)")
-            }
-        }
-        return rows
+        sql += " ORDER BY datetime(posts.published_at) DESC LIMIT :limit OFFSET :offset"
+        argumentStorage["limit"] = limit
+        argumentStorage["offset"] = offset
+        return (sql, StatementArguments(argumentStorage))
     }
 }
 
-// MARK: - SQLite helpers
-
-private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-
-enum SQLiteBinding {
-    case int(Int)
-    case text(String)
-    case null
-}
-
-private func bind(_ params: [SQLiteBinding], to statement: OpaquePointer?) throws {
-    for (index, param) in params.enumerated() {
-        let position = Int32(index + 1)
-        switch param {
-        case .int(let value):
-            sqlite3_bind_int64(statement, position, sqlite3_int64(value))
-        case .text(let string):
-            sqlite3_bind_text(statement, position, string, -1, SQLITE_TRANSIENT)
-        case .null:
-            sqlite3_bind_null(statement, position)
-        }
-    }
-}
-
-struct SQLiteRow {
-    private let columnNames: [String]
-    private let values: [SQLiteValue]
-
-    init(statement: OpaquePointer?) {
-        let columnCount = sqlite3_column_count(statement)
-        var names: [String] = []
-        var values: [SQLiteValue] = []
-        names.reserveCapacity(Int(columnCount))
-        values.reserveCapacity(Int(columnCount))
-        for index in 0..<columnCount {
-            let name = sqlite3_column_name(statement, index).map { String(cString: $0) } ?? "col_\(index)"
-            names.append(name)
-            let type = sqlite3_column_type(statement, index)
-            switch type {
-            case SQLITE_INTEGER:
-                values.append(.integer(sqlite3_column_int64(statement, index)))
-            case SQLITE_FLOAT:
-                values.append(.double(sqlite3_column_double(statement, index)))
-            case SQLITE_TEXT:
-                if let textPointer = sqlite3_column_text(statement, index) {
-                    values.append(.text(String(cString: textPointer)))
-                } else {
-                    values.append(.null)
-                }
-            case SQLITE_NULL:
-                values.append(.null)
-            default:
-                if let textPointer = sqlite3_column_text(statement, index) {
-                    values.append(.text(String(cString: textPointer)))
-                } else {
-                    values.append(.null)
-                }
-            }
-        }
-        self.columnNames = names
-        self.values = values
-    }
-
-    func index(of column: String) -> Int? {
-        columnNames.firstIndex(of: column)
-    }
-
-    func stringValue(for column: String) -> String? {
-        guard let idx = index(of: column) else { return nil }
-        return values[idx].stringValue
-    }
-
-    func intValue(for column: String) -> Int? {
-        guard let idx = index(of: column) else { return nil }
-        return values[idx].intValue
-    }
-
-    func optionalInt(for column: String) -> Int? {
-        return intValue(for: column)
-    }
-
-    func dateValue(for column: String) -> Date? {
-        guard let string = stringValue(for: column) else { return nil }
-        if let precise = iso8601Date(from: string, includesFractional: true) {
-            return precise
-        }
-        return iso8601Date(from: string, includesFractional: false)
-    }
-}
-
-enum SQLiteValue {
-    case integer(Int64)
-    case double(Double)
-    case text(String)
-    case null
-
-    var stringValue: String? {
-        switch self {
-        case .text(let string):
-            return string
-        case .integer(let value):
-            return String(value)
-        case .double(let value):
-            return String(value)
-        case .null:
-            return nil
-        }
-    }
-
-    var intValue: Int? {
-        switch self {
-        case .integer(let value):
-            return Int(value)
-        case .text(let string):
-            return Int(string)
-        case .double(let value):
-            return Int(value)
-        case .null:
-            return nil
-        }
-    }
+private struct TermBuckets {
+    var categories: [TermRecord] = []
+    var tags: [TermRecord] = []
 }
 
 // MARK: - Utility helpers
-
-private func iso8601Formatter(includesFractional: Bool) -> ISO8601DateFormatter {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = includesFractional
-        ? [.withInternetDateTime, .withFractionalSeconds]
-        : [.withInternetDateTime]
-    return formatter
-}
-
-private func iso8601String(from date: Date) -> String {
-    iso8601Formatter(includesFractional: true).string(from: date)
-}
-
-private func iso8601Date(from string: String, includesFractional: Bool) -> Date? {
-    iso8601Formatter(includesFractional: includesFractional).date(from: string)
-}
-
-private func htmlToText(_ html: String) -> String {
-#if canImport(UIKit)
-    guard let data = html.data(using: .utf8) else { return html }
-    let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
-        .documentType: NSAttributedString.DocumentType.html,
-        .characterEncoding: String.Encoding.utf8.rawValue
-    ]
-    if let attributed = try? NSAttributedString(
-        data: data,
-        options: options,
-        documentAttributes: nil
-    ) {
-        return attributed.string
-    }
-    return html
-#else
-    guard let regex = try? NSRegularExpression(pattern: "<[^>]+>", options: []) else {
-        return html
-    }
-    let range = NSRange(location: 0, length: html.utf16.count)
-    let stripped = regex.stringByReplacingMatches(in: html, options: [], range: range, withTemplate: " ")
-    return normalizeWhitespace(stripped)
-#endif
-}
-
-private func normalizeWhitespace(_ text: String) -> String {
-    let components = text.split(whereSeparator: { $0.isWhitespace || $0.isNewline })
-    return components.joined(separator: " ")
-}
 
 // MARK: - MCP Server
 
@@ -568,7 +654,6 @@ struct StepIntoVisionToolResponses {
         }
         let posts = try database
             .listPosts(limit: limit, offset: offset, categorySlug: arguments.categorySlug, tagSlug: arguments.tagSlug)
-            .sorted { $0.publishedAt > $1.publishedAt }
         let items = posts.map { $0.summary().toJSON() }
         let filters: [String: Any] = [
             "category_slug": arguments.categorySlug ?? NSNull(),
@@ -600,7 +685,7 @@ struct StepIntoVisionToolResponses {
     }
 
     func searchPosts(arguments: SearchPostsArguments) throws -> [String: Any] {
-        guard let query = arguments.query, query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 else {
+        guard let query = arguments.query?.trimmingCharacters(in: .whitespacesAndNewlines), query.count >= 2 else {
             throw ToolArgumentError("query must be at least 2 characters")
         }
         let limit = arguments.limit ?? 10
@@ -611,10 +696,10 @@ struct StepIntoVisionToolResponses {
         if offset < 0 {
             throw ToolArgumentError("offset cannot be negative")
         }
-        let posts = try database
-            .searchPosts(query: query, limit: limit, offset: offset)
-            .sorted { $0.publishedAt > $1.publishedAt }
-        let items = posts.map { $0.toJSON(includeHTML: arguments.includeHTML ?? false, includeText: !(arguments.includeHTML ?? false)) }
+        let posts = try database.searchPosts(query: query, limit: limit, offset: offset)
+        let includeHTML = arguments.includeHTML ?? false
+        let includeText = includeHTML ? false : true
+        let items = posts.map { $0.toJSON(includeHTML: includeHTML, includeText: includeText) }
         return [
             "query": query,
             "count": items.count,
@@ -635,7 +720,7 @@ public final class StepIntoVisionMCPServer: @unchecked Sendable {
     }
 
     private static let serverName = "Step Into Vision Swift MCP"
-    private static let serverVersion = "0.3.0"
+    private static let serverVersion = "0.4.0"
 
     private let database: ContentDatabase
     private let logger: Logger
@@ -880,7 +965,8 @@ public final class StepIntoVisionMCPServer: @unchecked Sendable {
         return .object(schema)
     }
 
-    // Internal hooks for unit tests to verify tool registration without spinning up the transport.
+    // MARK: - Internal hooks for unit testing
+
     func toolDefinitionsForTesting() -> [MCP.Tool] {
         tools.values.map(\.definition).sorted { $0.name < $1.name }
     }
