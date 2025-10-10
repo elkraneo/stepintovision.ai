@@ -2,6 +2,11 @@ import Foundation
 import SQLite3
 import MCP
 import Logging
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 // MARK: - Logging
 
@@ -521,12 +526,13 @@ private func iso8601Date(from string: String, includesFractional: Bool) -> Date?
 private func htmlToText(_ html: String) -> String {
 #if canImport(UIKit) || canImport(AppKit)
     guard let data = html.data(using: .utf8) else { return html }
+    let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+        .documentType: NSAttributedString.DocumentType.html,
+        .characterEncoding: String.Encoding.utf8.rawValue
+    ]
     if let attributed = try? NSAttributedString(
         data: data,
-        options: [
-            .documentType: NSAttributedString.DocumentType.html,
-            .characterEncoding: String.Encoding.utf8.rawValue
-        ],
+        options: options,
         documentAttributes: nil
     ) {
         return attributed.string
