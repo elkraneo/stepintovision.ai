@@ -53,19 +53,23 @@ args    = ["--db", "/path/to/stepintovision.ai/data/stepinto.db"]
 
 ### Using with `Companion`
 
-Companion speaks STDIO MCP out of the box. Point it to the compiled binary via the
-`--server` flag:
+Companion's "Add Server" sheet can launch STDIO MCP binaries directly:
+
+1. Click the <kbd>+</kbd> button, choose **STDIO**, and set **Command** to
+   `/path/to/swift/StepIntoVisionMCP/.build/release/stepinto-swift-mcp`.
+2. Add two arguments: `--db` and `/path/to/stepintovision.ai/data/stepinto.db`.
+3. Save to connect. The tools list should populate with `list_posts`, `get_post`, and
+   `search_posts` right away.
+
+If you prefer the Companion CLI, use the equivalent invocation:
 
 ```bash
-companion --server \
-  /path/to/swift/StepIntoVisionMCP/.build/release/stepinto-swift-mcp \
+companion --server-command /path/to/swift/StepIntoVisionMCP/.build/release/stepinto-swift-mcp \
   --server-argument --db \
   --server-argument /path/to/stepintovision.ai/data/stepinto.db
 ```
 
-Companion will show the three Step Into Vision tools (`list_posts`, `get_post`, and
-`search_posts`) as soon as the handshake completes. Run `tools` inside the Companion prompt
-to confirm registration before issuing tool calls.
+Run `tools` in the CLI session to confirm registration before calling into the MCP server.
 
 ## Testing
 
