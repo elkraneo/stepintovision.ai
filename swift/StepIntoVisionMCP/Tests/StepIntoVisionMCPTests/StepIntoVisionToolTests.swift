@@ -11,7 +11,7 @@ final class StepIntoVisionToolTests: XCTestCase {
     override func setUpWithError() throws {
         temporaryDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
-        databaseURL = temporaryDirectory.appendingPathComponent("stepinto-fixture.db")
+        databaseURL = temporaryDirectory.appendingPathComponent("stepintovision-fixture.db")
         let writer = try ContentDatabase(path: databaseURL.path, mode: .readWrite, logger: Logger(isVerbose: true))
         try writer.initializeSchema()
         try writer.upsert(posts: TestFixtures.makePosts())

@@ -7,7 +7,7 @@ import StepIntoVisionMCPCore
 @available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
 struct StepIntoVisionCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "stepinto-swift-mcp",
+        commandName: "stepintovision-mcp",
         abstract: "Serve Step Into Vision content over MCP (Swift implementation)."
     )
 

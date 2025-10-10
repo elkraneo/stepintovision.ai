@@ -1,8 +1,8 @@
 # Step Into Vision MCP (Swift)
 
 This directory contains a from-scratch Swift implementation of the Step Into Vision tooling.
-It now includes both the ingestion CLI (`stepinto-swift-ingest`) and the STDIO MCP server
-(`stepinto-swift-mcp`), so you can stay entirely within the Swift toolchain whether you're
+It now includes both the ingestion CLI (`stepintovision-ingest`) and the STDIO MCP server
+(`stepintovision-mcp`), so you can stay entirely within the Swift toolchain whether you're
 driving [`gpt5-codex`](https://github.com/OpenAI/gpt5-codex) or testing with
 [`mattt/Companion`](https://github.com/mattt/Companion).
 
@@ -22,7 +22,7 @@ cd swift/StepIntoVisionMCP
 swift build -c release
 ```
 
-The resulting binary lives at `.build/release/stepinto-swift-mcp`.
+The resulting binary lives at `.build/release/stepintovision-mcp`.
 
 ## Running
 
@@ -32,10 +32,10 @@ Stay inside the Swift toolchain for both ingestion and serving:
 cd /path/to/stepintovision.ai
 
 # Ingest the Step Into Vision catalog into SQLite
-swift run --package-path swift/StepIntoVisionMCP stepinto-swift-ingest --db data/stepinto.db
+swift run --package-path swift/StepIntoVisionMCP stepintovision-ingest --db data/stepinto.db
 
 # Then run the Swift MCP server (STDIO transport)
-swift run --package-path swift/StepIntoVisionMCP stepinto-swift-mcp --db data/stepinto.db
+swift run --package-path swift/StepIntoVisionMCP stepintovision-mcp --db data/stepinto.db
 ```
 
 By default the server prints a single log line when it starts. Pass `--verbose` to watch
@@ -47,7 +47,7 @@ Add a new MCP server entry to your `config.toml`:
 
 ```toml
 [mcp_servers.StepIntoVisionSwift]
-command = "/path/to/swift/StepIntoVisionMCP/.build/release/stepinto-swift-mcp"
+command = "/path/to/swift/StepIntoVisionMCP/.build/release/stepintovision-mcp"
 args    = ["--db", "/path/to/stepintovision.ai/data/stepinto.db"]
 ```
 
@@ -56,7 +56,7 @@ args    = ["--db", "/path/to/stepintovision.ai/data/stepinto.db"]
 Companion's "Add Server" sheet can launch STDIO MCP binaries directly:
 
 1. Click the <kbd>+</kbd> button, choose **STDIO**, and set **Command** to
-   `/path/to/swift/StepIntoVisionMCP/.build/release/stepinto-swift-mcp`.
+   `/path/to/swift/StepIntoVisionMCP/.build/release/stepintovision-mcp`.
 2. Add two arguments: `--db` and `/path/to/stepintovision.ai/data/stepinto.db`.
 3. Save to connect. The tools list should populate with `list_posts`, `get_post`, and
    `search_posts` right away.
@@ -64,7 +64,7 @@ Companion's "Add Server" sheet can launch STDIO MCP binaries directly:
 If you prefer the Companion CLI, use the equivalent invocation:
 
 ```bash
-companion --server-command /path/to/swift/StepIntoVisionMCP/.build/release/stepinto-swift-mcp \
+companion --server-command /path/to/swift/StepIntoVisionMCP/.build/release/stepintovision-mcp \
   --server-argument --db \
   --server-argument /path/to/stepintovision.ai/data/stepinto.db
 ```

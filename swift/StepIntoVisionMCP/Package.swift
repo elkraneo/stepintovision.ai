@@ -8,8 +8,8 @@ let package = Package(
     ],
     products: [
         .library(name: "StepIntoVisionMCPCore", targets: ["StepIntoVisionMCPCore"]),
-        .executable(name: "stepinto-swift-ingest", targets: ["StepIntoVisionIngest"]),
-        .executable(name: "stepinto-swift-mcp", targets: ["StepIntoVisionMCP"])
+        .executable(name: "stepintovision-ingest", targets: ["StepIntoVisionIngest"]),
+        .executable(name: "stepintovision-mcp", targets: ["StepIntoVisionMCP"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.6.1"),

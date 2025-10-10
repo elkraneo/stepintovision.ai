@@ -25,7 +25,7 @@ The Swift tooling is self-contained: it ingests the Step Into Vision WordPress f
 2. **Ingest the Step Into Vision catalog**
 
    ```bash
-   swift run --package-path swift/StepIntoVisionMCP stepinto-swift-ingest --db data/stepinto.db
+   swift run --package-path swift/StepIntoVisionMCP stepintovision-ingest --db data/stepinto.db
    ```
 
    Use `--help` for options such as `--base-url`, `--per-page`, or incremental syncs with `--modified-after`.
@@ -33,7 +33,7 @@ The Swift tooling is self-contained: it ingests the Step Into Vision WordPress f
 3. **Serve the MCP tools over STDIO**
 
    ```bash
-   swift run --package-path swift/StepIntoVisionMCP stepinto-swift-mcp --db data/stepinto.db
+   swift run --package-path swift/StepIntoVisionMCP stepintovision-mcp --db data/stepinto.db
    ```
 
    Add `--verbose` to watch requests stream by.
@@ -44,21 +44,21 @@ The Swift tooling is self-contained: it ingests the Step Into Vision WordPress f
 
      ```toml
      [mcp_servers.StepIntoVision]
-     command = "/path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepinto-swift-mcp"
+     command = "/path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepintovision-mcp"
      args    = ["--db", "/path/to/stepintovision.ai/data/stepinto.db"]
      ```
 
    - **`Companion`** (app):
 
      1. Open Companion, click the <kbd>+</kbd> button, and pick **STDIO**.
-     2. Set **Command** to `/path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepinto-swift-mcp`.
+     2. Set **Command** to `/path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepintovision-mcp`.
      3. Add the arguments `--db` and `/path/to/stepintovision.ai/data/stepinto.db` in the arguments list.
      4. Save. Companion should connect immediately and list `list_posts`, `get_post`, and `search_posts`. Use the in-app **Tools** view to verify registration before calling them.
 
      To configure the same server from the Companion CLI instead of the GUI, run:
 
      ```bash
-     companion --server-command /path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepinto-swift-mcp \
+     companion --server-command /path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepintovision-mcp \
        --server-argument --db \
        --server-argument /path/to/stepintovision.ai/data/stepinto.db
      ```

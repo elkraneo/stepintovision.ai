@@ -6,7 +6,7 @@ import StepIntoVisionMCPCore
 @available(macOS 10.15, macCatalyst 13, iOS 13, tvOS 13, watchOS 6, *)
 struct StepIntoVisionIngestCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "stepinto-swift-ingest",
+        commandName: "stepintovision-ingest",
         abstract: "Fetch Step Into Vision posts from WordPress into SQLite using Swift."
     )
 
