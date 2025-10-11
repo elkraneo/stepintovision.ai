@@ -19,6 +19,9 @@ export interface StepIntoVisionPost {
   contentHtml: string
   contentMarkdown: string
   contentText: string
+  wordCount: number
+  tokenCount: number
+  readingTimeSeconds: number
   publishedAt: string
   updatedAt: string
   link: string
@@ -29,6 +32,33 @@ export interface StepIntoVisionPost {
   author: string
   license: string
   version: number
+  seeAlso: StepIntoVisionSeeAlsoItem[]
+  contentDigest: string
+}
+
+export interface StepIntoVisionPostMetaDocument {
+  schema: "mcp.post.v1"
+  id: string
+  slug: string
+  title: string
+  description: string
+  locale: string
+  canonicalUrl: string
+  markdownUri: string
+  mcpResource: string
+  publishedAt: string
+  updatedAt: string
+  categories: string[]
+  tags: string[]
+  author: string
+  license: string
+  version: number
+  contentType: "text/markdown"
+  wordCount: number
+  tokenCount: number
+  readingTimeSeconds: number
+  heroImage?: StepIntoVisionMedia | null
+  media: StepIntoVisionMedia[]
   seeAlso: StepIntoVisionSeeAlsoItem[]
   contentDigest: string
 }

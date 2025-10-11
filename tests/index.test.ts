@@ -25,6 +25,9 @@ beforeAll(async () => {
         contentHtml: "<p>Example HTML</p>",
         contentMarkdown: "Example HTML",
         contentText: "Example HTML",
+        wordCount: 2,
+        tokenCount: 3,
+        readingTimeSeconds: 30,
         link: "https://stepinto.vision/example-code/realitykit-basics-coordinate-space-conversion/",
         publishedAt: "2024-04-20T12:00:00Z",
         updatedAt: "2024-04-20T12:00:00Z",
@@ -63,10 +66,8 @@ describe("ai-readable routing", () => {
     expect(response.headers.get("Content-Type")).toContain("text/markdown")
     const body = await response.text()
     expect(body).toContain("RealityKit Basics: Coordinate Space Conversion")
-    expect(body).toContain("schema: mcp.post.v1")
-    expect(body).toContain("canonicalUrl: https://stepinto.vision/example-code/realitykit-basics-coordinate-space-conversion/")
-    expect(body).toContain("aiReadableUrl: https://stepintovision.ai/example-code/realitykit-basics-coordinate-space-conversion")
-    expect(body).toContain("contentDigest: sha256-test")
+    expect(body.startsWith("# RealityKit Basics: Coordinate Space Conversion")).toBe(true)
+    expect(body).not.toContain("schema: mcp.post.v1")
   })
 
   it("supports the /mcp prefix for local workers", async () => {

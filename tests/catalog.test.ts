@@ -13,6 +13,9 @@ const samplePosts: StepIntoVisionPost[] = [
     contentHtml: "<p>Hello Vision</p>",
     contentMarkdown: "Hello Vision",
     contentText: "Hello Vision",
+    wordCount: 2,
+    tokenCount: 3,
+    readingTimeSeconds: 30,
     link: "https://stepinto.vision/hello-world",
     publishedAt: "2024-01-01T00:00:00Z",
     updatedAt: "2024-01-01T00:00:00Z",
@@ -34,6 +37,9 @@ const samplePosts: StepIntoVisionPost[] = [
     contentHtml: "<p>Dive</p>",
     contentMarkdown: "Dive",
     contentText: "Dive",
+    wordCount: 1,
+    tokenCount: 1,
+    readingTimeSeconds: 30,
     link: "https://stepinto.vision/deep-dive",
     publishedAt: "2024-02-01T00:00:00Z",
     updatedAt: "2024-02-02T00:00:00Z",
@@ -69,12 +75,8 @@ describe("catalog helpers", () => {
 
   it("renders markdown with metadata", () => {
     const markdown = renderPostMarkdown(samplePosts[0])
-    expect(markdown).toContain("schema: mcp.post.v1")
-    expect(markdown).toContain("title: Hello World")
-    expect(markdown).toContain("mcpResource: stepintovision://post/hello-world")
-    expect(markdown).toContain("aiReadableUrl: https://stepintovision.ai/hello-world")
-    expect(markdown).toContain("## At a Glance")
-    expect(markdown).toContain("- **Canonical URL:** https://stepinto.vision/hello-world")
-    expect(markdown).toContain("## Body")
+    expect(markdown.startsWith("# Hello World")).toBe(true)
+    expect(markdown).toContain("Hello Vision")
+    expect(markdown).not.toContain("schema: mcp.post.v1")
   })
 })

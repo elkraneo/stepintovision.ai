@@ -60,8 +60,9 @@ returns service metadata and available routes.
 - `GET /posts` – list paginated posts with optional `category`, `tag`, `limit`,
   and `offset` query parameters.
 - `GET /posts/:slug` – fetch a single post by slug. Request `text/markdown` to
-  receive sosumi-style Markdown with YAML front matter, normalized body
-  content, and structured metadata.
+  receive normalized Markdown without front matter. Post metadata is available
+  via the MCP resource `_meta` fields or the JSON companion resource described
+  below.
 - `GET /posts/id/:id` – fetch a post by its numeric WordPress identifier.
 - `GET /search?q=vision` – keyword search backed by Fuse.js fuzzy search.
 - `POST /mcp` (Streamable HTTP) – Model Context Protocol endpoint powering the
@@ -97,32 +98,32 @@ Available MCP tools:
 - `getStepIntoVisionPost` – Retrieve a post by slug or ID.
 - `searchStepIntoVisionPosts` – Run keyword searches.
 
-And a resource template:
+Resource templates:
 
-- `stepintovision://post/{slug}` – Provides Markdown for a specific post with
-  detailed YAML metadata, curated Markdown body content, and structured
-  taxonomy. The payload mirrors sosumi.ai and is designed for downstream agent
-  consumption.
+- `stepintovision://post/{slug}` – AI-focused Markdown for a specific post. The
+  Markdown contains only the article body and optional `## See Also` section.
+  All metadata lives in the resource `_meta` object so agents do not need to
+  parse the Markdown.
+- `stepintovision://post/{slug}/meta` – JSON payload conforming to
+  `mcp.post.v1` that mirrors sosumi.ai’s structured document. The Markdown
+  resource references this URI via `_meta.metaUri`.
 
-### Markdown front matter
+### MCP metadata
 
-Every Markdown response begins with a `schema: "mcp.post.v1"` front matter
-block. Fields exposed to MCP clients include:
+Each Markdown resource includes `_meta` fields with:
 
-- Identity: `id`, `slug`, `title`, `description`, `canonicalUrl`,
-  `aiReadableUrl`, `mcpResource`.
-- Provenance: `publishedAt`, `updatedAt`, `author`, `license`, `version`,
-  `contentDigest` (SHA-256).
-- Format hints: `locale`, `contentType`, `wordCount`, `tokenCount`,
+- Identity: `schema`, `canonicalUrl`, `markdownUri`, `metaUri`, `mcpResource`.
+- Provenance: ISO-8601 `publishedAt`, `updatedAt`, author, license, version,
+  and SHA-256 `contentDigest`.
+- Format hints: locale, `contentType`, `wordCount`, `tokenCount`,
   `readingTimeSeconds`.
-- Taxonomy: `categories`, `tags`, and structured `seeAlso` entries.
-- Media: `heroImage` object with `role`, `url`, `alt`, `width`, and `height`.
+- Taxonomy & relations: categories, tags, hero image metadata, `seeAlso`, and
+  an `alternateUrls.aiReadable` pointer for the public domain swap.
 
-The Markdown body is generated from sanitized WordPress HTML and includes
-language-tagged code fences, deduplicated media references, and a `## See Also`
-section derived from related links when available. Raw HTML remains accessible
-through the MCP tool’s `structuredContent.post.contentHtml` field for agents
-that require it.
+The JSON metadata companion exposes the same information plus the `schema`
+version in a machine-friendly document. The Markdown body continues to be
+generated from sanitized WordPress HTML with language-tagged code fences and a
+derived `## See Also` section when available.
 
 ### Testing & Quality
 

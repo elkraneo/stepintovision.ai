@@ -233,6 +233,9 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
   const contentMarkdown = prepared.markdown
   const contentText = prepared.text
   const seeAlso = prepared.seeAlso
+  const wordCount = contentText.split(/\s+/).filter(Boolean).length
+  const tokenCount = Math.max(1, Math.round(wordCount * 1.3))
+  const readingTimeSeconds = Math.max(30, Math.round((wordCount / 200) * 60))
 
   const excerptHtml = sanitizeHtml(post.excerpt.rendered)
   const excerpt = fixCommonGrammar(
@@ -255,6 +258,9 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     contentHtml,
     contentMarkdown,
     contentText,
+    wordCount,
+    tokenCount,
+    readingTimeSeconds,
     link: post.link,
     publishedAt: post.date,
     updatedAt: post.modified,
@@ -394,6 +400,36 @@ function prepareContent(rawHtml: string): PreparedContent {
   })
 
   $("[style]").removeAttr("style")
+
+  $("div.wp-block-kevinbatdorf-code-block-pro").each((_, element) => {
+    const textarea = $(element).find("textarea").first()
+    let codeText = textarea.text().replace(/\r\n/g, "\n").trim()
+    if (!codeText) {
+      const codeElement = $(element).find("pre code").first()
+      codeText = codeElement.text().replace(/\r\n/g, "\n").trim()
+    }
+    if (!codeText) {
+      $(element).remove()
+      return
+    }
+    let language = inferCodeLanguage(codeText)
+    if (!language) {
+      const codeElement = $(element).find("code").first()
+      const classAttr = codeElement.attr("class") ?? ""
+      const match = classAttr.match(/language-([a-z0-9]+)/i)
+      if (match) {
+        language = match[1]
+      }
+    }
+
+    if (language === "swift") {
+      codeText = ensureSwiftImports(codeText)
+    }
+
+    const replacement = `<pre><code class="language-${language ?? "text"}">${escapeHtml(codeText)}</code></pre>`
+    $(element).replaceWith(replacement)
+  })
+
   $("[class]").each((_, element) => {
     const el = element as unknown as { attribs?: Record<string, string> }
     if (!el.attribs) {
@@ -449,31 +485,6 @@ function prepareContent(rawHtml: string): PreparedContent {
     }
   })
 
-  $("div.wp-block-kevinbatdorf-code-block-pro").each((_, element) => {
-    const textarea = $(element).find("textarea").first()
-    let codeText = textarea.text().replace(/\r\n/g, "\n").trim()
-    if (!codeText) {
-      const codeElement = $(element).find("pre code").first()
-      codeText = codeElement.text().replace(/\r\n/g, "\n").trim()
-    }
-    if (!codeText) {
-      $(element).remove()
-      return
-    }
-    let language = inferCodeLanguage(codeText)
-    if (!language) {
-      const codeElement = $(element).find("code").first()
-      const classAttr = codeElement.attr("class") ?? ""
-      const match = classAttr.match(/language-([a-z0-9]+)/i)
-      if (match) {
-        language = match[1]
-      }
-    }
-
-    const replacement = `<pre><code class="language-${language ?? "text"}">${escapeHtml(codeText)}</code></pre>`
-    $(element).replaceWith(replacement)
-  })
-
   const cleanedHtml = fixCommonGrammar($.root().html()?.trim() ?? "")
 
   const markdown = turndown.turndown(cleanedHtml)
@@ -527,6 +538,31 @@ function escapeHtml(value: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
+}
+
+function ensureSwiftImports(code: string): string {
+  let result = code.trim()
+  const needsSwiftUI = !/\bimport\s+SwiftUI\b/.test(result) && /:\s*View\b/.test(result)
+  const needsRealityKit = !/\bimport\s+RealityKit\b/.test(result) && /\bRealityKit\b/.test(result)
+  const needsRealityKitContent =
+    !/\bimport\s+RealityKitContent\b/.test(result) && /\bRealityKitContent\b/.test(result)
+
+  const imports: string[] = []
+  if (needsSwiftUI) {
+    imports.push("import SwiftUI")
+  }
+  if (needsRealityKit) {
+    imports.push("import RealityKit")
+  }
+  if (needsRealityKitContent) {
+    imports.push("import RealityKitContent")
+  }
+
+  if (imports.length === 0) {
+    return result
+  }
+
+  return `${imports.join("\n")}\n\n${result}`
 }
 
 function dedupeSeeAlso(items: StepIntoVisionSeeAlsoItem[]): StepIntoVisionSeeAlsoItem[] {

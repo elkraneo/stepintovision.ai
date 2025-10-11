@@ -3,7 +3,10 @@ import { z } from "zod"
 
 import { getPostById, getPostBySlug, listPosts, searchPosts } from "./catalog"
 import { renderPostMarkdown } from "./markdown"
-import type { StepIntoVisionPost } from "./types"
+import type { StepIntoVisionPost, StepIntoVisionPostMetaDocument } from "./types"
+
+const MARKDOWN_MIME_TYPE = "text/markdown"
+const JSON_MIME_TYPE = "application/json"
 
 function buildAiReadableUrl(post: StepIntoVisionPost): string {
   try {
@@ -14,18 +17,170 @@ function buildAiReadableUrl(post: StepIntoVisionPost): string {
   }
 }
 
+function toIsoString(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return date.toISOString()
+}
+
+function buildResourceUri(post: StepIntoVisionPost): string {
+  return `stepintovision://post/${post.slug}`
+}
+
+function buildMetaUri(post: StepIntoVisionPost): string {
+  return `stepintovision://post/${post.slug}/meta`
+}
+
+function buildMarkdownName(post: StepIntoVisionPost): string {
+  return `${post.slug}.md`
+}
+
+function buildMetaName(post: StepIntoVisionPost): string {
+  return `${post.slug}.meta.json`
+}
+
+function buildResourceMeta(post: StepIntoVisionPost): Record<string, unknown> {
+  const heroImage = post.heroImage ?? null
+  const media = heroImage ? [heroImage] : []
+  const markdownUri = buildResourceUri(post)
+  return {
+    schema: "mcp.post.v1",
+    canonicalUrl: post.link,
+    markdownUri,
+    metaUri: buildMetaUri(post),
+    mcpResource: markdownUri,
+    contentType: MARKDOWN_MIME_TYPE,
+    publishedAt: toIsoString(post.publishedAt),
+    updatedAt: toIsoString(post.updatedAt),
+    locale: post.locale,
+    author: post.author,
+    license: post.license,
+    version: post.version,
+    categories: post.categories,
+    tags: post.tags,
+    heroImage,
+    media,
+    seeAlso: post.seeAlso,
+    wordCount: post.wordCount,
+    tokenCount: post.tokenCount,
+    readingTimeSeconds: post.readingTimeSeconds,
+    contentDigest: post.contentDigest,
+    alternateUrls: {
+      aiReadable: buildAiReadableUrl(post),
+    },
+  }
+}
+
+function buildResourceItem(post: StepIntoVisionPost) {
+  return {
+    uri: buildResourceUri(post),
+    name: post.slug,
+    title: post.title,
+    description: post.excerpt,
+    mimeType: MARKDOWN_MIME_TYPE,
+    annotations: {
+      audience: ["assistant"],
+      priority: 0.8,
+      lastModified: toIsoString(post.updatedAt),
+      publishedAt: toIsoString(post.publishedAt),
+    },
+    _meta: buildResourceMeta(post),
+  }
+}
+
+function buildMetaDocument(post: StepIntoVisionPost): StepIntoVisionPostMetaDocument {
+  const heroImage = post.heroImage ?? null
+  const media = heroImage ? [heroImage] : []
+  const markdownUri = buildResourceUri(post)
+  return {
+    schema: "mcp.post.v1",
+    id: String(post.id),
+    slug: post.slug,
+    title: post.title,
+    description: post.excerpt,
+    locale: post.locale,
+    canonicalUrl: post.link,
+    markdownUri,
+    mcpResource: markdownUri,
+    publishedAt: toIsoString(post.publishedAt),
+    updatedAt: toIsoString(post.updatedAt),
+    categories: post.categories,
+    tags: post.tags,
+    author: post.author,
+    license: post.license,
+    version: post.version,
+    contentType: MARKDOWN_MIME_TYPE,
+    wordCount: post.wordCount,
+    tokenCount: post.tokenCount,
+    readingTimeSeconds: post.readingTimeSeconds,
+    heroImage,
+    media,
+    seeAlso: post.seeAlso,
+    contentDigest: post.contentDigest,
+  }
+}
+
+function buildMetaResourceItem(post: StepIntoVisionPost) {
+  const metaDocument = buildMetaDocument(post)
+  return {
+    uri: buildMetaUri(post),
+    name: `${post.slug}-meta`,
+    title: `${post.title} metadata`,
+    description: `Structured metadata for ${post.title}`,
+    mimeType: JSON_MIME_TYPE,
+    annotations: {
+      audience: ["assistant"],
+      lastModified: metaDocument.updatedAt,
+    },
+    _meta: {
+      canonicalUrl: metaDocument.canonicalUrl,
+      markdownUri: metaDocument.markdownUri,
+      mcpResource: metaDocument.mcpResource,
+      schema: metaDocument.schema,
+      contentDigest: metaDocument.contentDigest,
+      suggestedFileName: buildMetaName(post),
+    },
+  }
+}
+
 export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) {
   const server = new McpServer({
     name: "stepintovision.ai",
     version: "1.0.0",
   })
 
+  const completeSlug = async (value: string) => {
+    const posts = await loadPosts()
+    const prefix = value?.toLowerCase() ?? ""
+    return posts
+      .map((post) => post.slug)
+      .filter((slug) => !prefix || slug.toLowerCase().startsWith(prefix))
+  }
+
+  const postTemplate = new ResourceTemplate("stepintovision://post/{slug}", {
+    list: async () => {
+      const posts = await loadPosts()
+      return {
+        resources: posts.map(buildResourceItem),
+        _meta: {
+          total: posts.length,
+        },
+      }
+    },
+    complete: {
+      slug: completeSlug,
+    },
+  })
+
   server.registerResource(
     "stepIntoVisionPost",
-    new ResourceTemplate("stepintovision://post/{slug}", { list: undefined }),
+    postTemplate,
     {
-      title: "Step Into Vision Post",
-      description: "Retrieve Step Into Vision posts as Markdown",
+      title: "Step Into Vision post (Markdown)",
+      description: "AI-ready Markdown body for Step Into Vision articles.",
+      mimeType: MARKDOWN_MIME_TYPE,
     },
     async (uri, { slug }) => {
       const posts = await loadPosts()
@@ -36,8 +191,10 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
           contents: [
             {
               uri: uri.href,
-              text: `Post with slug ${slug.toString()} not found.`,
+              name: slug.toString(),
+              title: `Missing post: ${slug.toString()}`,
               mimeType: "text/plain",
+              text: `Post with slug "${slug.toString()}" not found.`,
             },
           ],
         }
@@ -47,8 +204,74 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
         contents: [
           {
             uri: uri.href,
+            name: buildMarkdownName(post),
+            title: post.title,
+            mimeType: MARKDOWN_MIME_TYPE,
             text: renderPostMarkdown(post),
-            mimeType: "text/markdown",
+            _meta: buildResourceMeta(post),
+          },
+        ],
+      }
+    },
+  )
+
+  const metaTemplate = new ResourceTemplate("stepintovision://post/{slug}/meta", {
+    list: async () => {
+      const posts = await loadPosts()
+      return {
+        resources: posts.map(buildMetaResourceItem),
+        _meta: {
+          total: posts.length,
+        },
+      }
+    },
+    complete: {
+      slug: completeSlug,
+    },
+  })
+
+  server.registerResource(
+    "stepIntoVisionPostMeta",
+    metaTemplate,
+    {
+      title: "Step Into Vision post metadata",
+      description: "Structured metadata for Step Into Vision posts.",
+      mimeType: JSON_MIME_TYPE,
+    },
+    async (uri, { slug }) => {
+      const posts = await loadPosts()
+      const post = getPostBySlug(posts, slug.toString())
+
+      if (!post) {
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              name: slug.toString(),
+              title: `Missing post metadata: ${slug.toString()}`,
+              mimeType: "text/plain",
+              text: `Post with slug "${slug.toString()}" not found.`,
+            },
+          ],
+        }
+      }
+
+      const metaDocument = buildMetaDocument(post)
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            name: buildMetaName(post),
+            title: `${post.title} metadata`,
+            mimeType: JSON_MIME_TYPE,
+            text: JSON.stringify(metaDocument, null, 2),
+            _meta: {
+              canonicalUrl: metaDocument.canonicalUrl,
+              markdownUri: metaDocument.markdownUri,
+              mcpResource: metaDocument.mcpResource,
+              schema: metaDocument.schema,
+              contentDigest: metaDocument.contentDigest,
+            },
           },
         ],
       }
@@ -70,38 +293,23 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
     async ({ limit = 10, offset = 0, category, tag }) => {
       const posts = await loadPosts()
       const items = listPosts(posts, { limit, offset, category, tag })
+      const resources = items.map(buildResourceItem)
 
       return {
         content: [
           {
             type: "text" as const,
             text:
-              items.length === 0
+              resources.length === 0
                 ? "No posts found for the requested filters."
-                : items
-                    .map(
-                      (post) =>
-                        `- ${post.title} (slug: ${post.slug}, published ${new Date(post.publishedAt).toISOString()})`,
-                    )
+                : resources
+                    .map((resource) => `- ${resource.title} — ${resource.uri}`)
                     .join("\n"),
           },
         ],
-          structuredContent: {
-            items: items.map((post) => ({
-              id: post.id,
-              slug: post.slug,
-              title: post.title,
-              excerpt: post.excerpt,
-              publishedAt: post.publishedAt,
-              updatedAt: post.updatedAt,
-              link: post.link,
-              aiReadableUrl: buildAiReadableUrl(post),
-              mcpResource: `stepintovision://post/${post.slug}`,
-              categories: post.categories,
-              tags: post.tags,
-              contentDigest: post.contentDigest,
-            })),
-          },
+        structuredContent: {
+          resources,
+        },
       }
     },
   )
@@ -144,65 +352,36 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
         }
       }
 
-      const sections: string[] = []
-      sections.push(`# ${post.title}`)
-      sections.push(`Published: ${new Date(post.publishedAt).toISOString()}`)
-      if (post.updatedAt && post.updatedAt !== post.publishedAt) {
-        sections.push(`Updated: ${new Date(post.updatedAt).toISOString()}`)
+      const content = includeText
+        ? [
+            {
+              type: "text" as const,
+              text: renderPostMarkdown(post),
+            },
+          ]
+        : [
+            {
+              type: "text" as const,
+              text: `${post.title} — ${buildResourceUri(post)}`,
+            },
+          ]
+
+      const structuredContent: Record<string, unknown> = {
+        resource: buildResourceItem(post),
+        metaResource: buildMetaResourceItem(post),
       }
-      if (post.categories.length > 0) {
-        sections.push(`Categories: ${post.categories.join(", ")}`)
-      }
-      if (post.tags.length > 0) {
-        sections.push(`Tags: ${post.tags.join(", ")}`)
-      }
-      sections.push("")
-      sections.push(post.excerpt)
 
       if (includeText) {
-        sections.push("")
-        sections.push(post.contentMarkdown)
+        structuredContent.text = post.contentText
       }
 
       if (includeHtml) {
-        sections.push("")
-        sections.push("```html")
-        sections.push(post.contentHtml)
-        sections.push("```")
+        structuredContent.html = post.contentHtml
       }
 
       return {
-        content: [
-          {
-            type: "text" as const,
-            text: sections.join("\n"),
-          },
-        ],
-          structuredContent: {
-            post: {
-              id: post.id,
-              slug: post.slug,
-              title: post.title,
-              excerpt: post.excerpt,
-              link: post.link,
-              aiReadableUrl: buildAiReadableUrl(post),
-              mcpResource: `stepintovision://post/${post.slug}`,
-              publishedAt: post.publishedAt,
-              updatedAt: post.updatedAt,
-              categories: post.categories,
-              tags: post.tags,
-              heroImage: post.heroImage ?? undefined,
-              seeAlso: post.seeAlso,
-              locale: post.locale,
-              author: post.author,
-              license: post.license,
-              version: post.version,
-              contentDigest: post.contentDigest,
-              contentMarkdown: includeText ? post.contentMarkdown : undefined,
-              contentText: includeText ? post.contentText : undefined,
-              contentHtml: includeHtml ? post.contentHtml : undefined,
-            },
-          },
+        content,
+        structuredContent,
       }
     },
   )
@@ -220,22 +399,40 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
     async ({ query, limit = 10 }) => {
       const posts = await loadPosts()
       const hits = searchPosts(posts, query, limit)
+      const postBySlug = new Map(posts.map((post) => [post.slug, post]))
+
+      const resources = hits
+        .map((hit) => postBySlug.get(hit.slug))
+        .filter((post): post is StepIntoVisionPost => Boolean(post))
+        .map(buildResourceItem)
+
+      const lines =
+        hits.length === 0
+          ? `No results found for "${query}".`
+          : hits
+              .map((hit, index) => {
+                const post = postBySlug.get(hit.slug)
+                const uri = post ? buildResourceUri(post) : hit.link
+                return `${index + 1}. ${hit.title} — ${uri}`
+              })
+              .join("\n")
 
       return {
         content: [
           {
             type: "text" as const,
-            text:
-              hits.length === 0
-                ? `No results found for "${query}".`
-                : hits
-                    .map((hit, index) => `${index + 1}. ${hit.title} — ${hit.link}`)
-                    .join("\n"),
+            text: lines,
           },
         ],
         structuredContent: {
           query,
-          hits,
+          hits: hits.map((hit) => ({
+            ...hit,
+            resource: postBySlug.get(hit.slug)
+              ? buildResourceItem(postBySlug.get(hit.slug) as StepIntoVisionPost)
+              : undefined,
+          })),
+          resources,
         },
       }
     },
@@ -243,4 +440,3 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
 
   return server
 }
-

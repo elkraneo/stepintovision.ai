@@ -67,6 +67,7 @@ describe("normalizeWordPressPost", () => {
     expect(post.title).toBe("Example & Test")
     expect(post.contentHtml).not.toContain("<script")
     expect(post.contentMarkdown).toContain("```swift")
+    expect(post.contentMarkdown).toContain("import SwiftUI")
     expect(post.contentText).toContain("Main content")
     expect(post.seeAlso).toEqual([
       { title: "Example 1", url: "https://stepinto.vision/example-1/" },
@@ -75,6 +76,9 @@ describe("normalizeWordPressPost", () => {
     expect(post.license).toBe("All rights reserved")
     expect(post.contentDigest).toMatch(/^sha256-/)
     expect(post.excerpt).toContain("ways to convert values")
+    expect(post.wordCount).toBeGreaterThan(0)
+    expect(post.tokenCount).toBeGreaterThan(0)
+    expect(post.readingTimeSeconds).toBeGreaterThanOrEqual(30)
   })
 
   it("falls back to numeric taxonomy IDs when embedded terms are absent", () => {
