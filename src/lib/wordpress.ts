@@ -36,6 +36,8 @@ interface WordPressPost {
   title: WordPressRenderedField
   excerpt: WordPressRenderedField
   content: WordPressRenderedField
+  categories?: number[]
+  tags?: number[]
   _embedded?: {
     [key: string]: Array<WordPressEmbeddedTerm[] | WordPressMedia[]>
   }
@@ -80,17 +82,25 @@ export async function fetchWordPressPosts(options: WordPressIngestOptions = {}):
     url.searchParams.set("orderby", "modified")
     url.searchParams.set("order", "desc")
     url.searchParams.set("_embed", "true")
-    url.searchParams.set("_fields", [
-      "id",
-      "slug",
-      "link",
-      "date",
-      "modified",
-      "title",
-      "excerpt",
-      "content",
-      "_embedded",
-    ].join(","))
+    url.searchParams.set(
+      "_fields",
+      [
+        "id",
+        "slug",
+        "link",
+        "date",
+        "modified",
+        "title",
+        "excerpt",
+        "content",
+        "categories",
+        "tags",
+        "_embedded",
+        "_embedded.wp:term",
+        "_embedded.wp:featuredmedia",
+        "_embedded.wp:featuredmedia.source_url",
+      ].join(","),
+    )
 
     if (modifiedAfter) {
       url.searchParams.set("modified_after", modifiedAfter)

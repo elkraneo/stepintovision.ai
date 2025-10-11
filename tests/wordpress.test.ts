@@ -80,4 +80,45 @@ describe("fetchWordPressPosts", () => {
     expect(result).toHaveLength(1)
     expect(result[0]?.slug).toBe("first")
   })
+
+  it("requests embedded taxonomy fields for categories and tags", async () => {
+    const posts = [
+      {
+        id: 2,
+        slug: "second",
+        link: "https://stepinto.vision/second",
+        date: "2024-02-01T00:00:00",
+        modified: "2024-02-02T00:00:00",
+        title: { rendered: "Second" },
+        excerpt: { rendered: "<p>Second</p>" },
+        content: { rendered: "<p>Body</p>" },
+      },
+    ]
+
+    const response = new Response(JSON.stringify(posts), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "X-WP-TotalPages": "1",
+      },
+    })
+
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response)
+    vi.stubGlobal("fetch", fetchMock)
+
+    await fetchWordPressPosts({ maxPages: 1 })
+
+    const requestedUrl = fetchMock.mock.calls[0]?.[0]
+    expect(requestedUrl).toBeInstanceOf(URL)
+    const fieldsParam = (requestedUrl as URL).searchParams.get("_fields")
+    expect(fieldsParam?.split(",")).toEqual(
+      expect.arrayContaining([
+        "categories",
+        "tags",
+        "_embedded.wp:term",
+        "_embedded.wp:featuredmedia",
+        "_embedded.wp:featuredmedia.source_url",
+      ]),
+    )
+  })
 })
