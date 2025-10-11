@@ -1,6 +1,0 @@
-#ifndef SQLITE_SNAPSHOT_STUBS_H
-#define SQLITE_SNAPSHOT_STUBS_H
-
-#include <sqlite3.h>
-
-#endif // SQLITE_SNAPSHOT_STUBS_H

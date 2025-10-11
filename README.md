@@ -1,76 +1,124 @@
-# Step Into Vision MCP
-![Terminal window showing Codex analysis output summarizing ornament coverage across Step Into Vision labs.](./assets/example-codex-query-ornaments-output.png "Codex ornament query output")
+# stepintovision.ai
 
-This repository packages a Swift-first toolchain for exploring Step Into Vision content. Everything you need to ingest data and serve it over the Model Context Protocol lives in the Swift package so you can stay in one toolchain from start to finish.
+A TypeScript rewrite of the Step Into Vision content service inspired by the
+[architecture of sosumi.ai](https://github.com/NSHipster/sosumi.ai).
 
-## Requirements
+The project ingests the Step Into Vision WordPress site and exposes the catalog
+as:
 
-- Swift 6.1 (available via Xcode 16 or the Swift 6 toolchains)
+- A REST API built with [Hono](https://hono.dev) that runs locally or on
+  serverless platforms such as Cloudflare Workers.
+- An MCP server with tools and resources tailored to Step Into Vision content.
 
-## Repository Layout
+## Project Layout
 
-- `swift/StepIntoVisionMCP/` – Swift-only ingestion + MCP server built on the official Model Context Protocol Swift SDK and sqlite-data
-- `data/` – empty folder kept for your local SQLite database (ignored by git)
+- `src/index.ts` – Hono application entrypoint (HTTP + MCP).
+- `src/lib/` – Shared domain logic for catalog storage, search, rendering, and
+  ingestion helpers.
+- `src/cli/ingest.ts` – CLI that fetches Step Into Vision posts and produces a
+  static catalog file.
+- `tests/` – Vitest unit tests.
+- `data/` – Ignored directory where the generated catalog is stored locally.
 
-## Swift Quick Start
+## Getting Started
 
-The Swift tooling is self-contained: it ingests the Step Into Vision WordPress feed, stores it with sqlite-data, and serves the tools over STDIO.
+### Prerequisites
 
-1. **Build (or fetch dependencies)**
+- Node.js 18 or newer
+- npm 10 or newer
 
-   ```bash
-   swift build --package-path swift/StepIntoVisionMCP
-   ```
+### Install Dependencies
 
-2. **Ingest the Step Into Vision catalog**
+```bash
+npm install
+```
 
-   ```bash
-   swift run --package-path swift/StepIntoVisionMCP stepintovision-ingest --db data/stepinto.db
-   ```
+### Ingest Content
 
-   Use `--help` for options such as `--base-url`, `--per-page`, or incremental syncs with `--modified-after`.
+Fetch Step Into Vision posts and write them to `data/stepintovision.json`:
 
-3. **Serve the MCP tools over STDIO**
+```bash
+npm run ingest
+```
 
-   ```bash
-   swift run --package-path swift/StepIntoVisionMCP stepintovision-mcp --db data/stepinto.db
-   ```
+Use `--help` to list additional options including pagination controls and an
+alternative base URL for staging or archived copies.
 
-   Add `--verbose` to watch requests stream by.
+### Run the Development Server
 
-4. **Connect from an MCP client**
+```bash
+npm run dev
+```
 
-   - **`gpt5-codex`** `config.toml` example:
+The server listens on `http://localhost:8787` by default. The root endpoint
+returns service metadata and available routes.
 
-     ```toml
-     [mcp_servers.StepIntoVision]
-     command = "/path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepintovision-mcp"
-     args    = ["--db", "/path/to/stepintovision.ai/data/stepinto.db"]
-     ```
+### Call the API
 
-   - **`Companion`** (app):
+- `GET /posts` – list paginated posts with optional `category`, `tag`, `limit`,
+  and `offset` query parameters.
+- `GET /posts/:slug` – fetch a single post by slug. Request `text/markdown` to
+  receive a Markdown rendition that includes HTML source.
+- `GET /posts/id/:id` – fetch a post by its numeric WordPress identifier.
+- `GET /search?q=vision` – keyword search backed by Fuse.js fuzzy search.
+- `POST /mcp` (Streamable HTTP) – Model Context Protocol endpoint powering the
+  Step Into Vision tools.
 
-     1. Open Companion, click the <kbd>+</kbd> button, and pick **STDIO**.
-     2. Set **Command** to `/path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepintovision-mcp`.
-     3. Use the **Arguments** table to add two separate entries: first `--db`, then `/path/to/stepintovision.ai/data/stepinto.db`. (Do not comma-separate them—Companion passes each row as a distinct process argument.)
-     4. Save. Companion should connect immediately and list `list_posts`, `get_post`, and `search_posts`. Use the in-app **Tools** view to verify registration before calling them.
+### MCP Integration
 
-     _Companion's command-line interface does not yet expose flags for configuring STDIO servers. Use the macOS/iOS app to add the server, or keep an eye on the [upstream README](https://github.com/mattt/Companion) for CLI support updates._
+Configure compatible clients to connect to the MCP endpoint directly when
+self-hosting:
 
-5. **Run the Swift tests whenever you touch the core library**
+```json
+{
+  "mcpServers": {
+    "stepIntoVision": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://localhost:8787/mcp"]
+    }
+  }
+}
+```
 
-   ```bash
-   swift test --package-path swift/StepIntoVisionMCP
-   ```
+Available MCP tools:
 
-## Available Tools
+- `listStepIntoVisionPosts` – List recent posts with filters.
+- `getStepIntoVisionPost` – Retrieve a post by slug or ID.
+- `searchStepIntoVisionPosts` – Run keyword searches.
 
-- `list_posts(limit=10, offset=0, category_slug=None, tag_slug=None)` – paginated listing of recent articles.
-- `get_post(slug=None, post_id=None, include_html=False, include_text=True)` – fetch a single record.
-- `search_posts(query, limit=10, offset=0, include_html=False)` – keyword search across title, excerpt, tags, and body.
+And a resource template:
 
-All responses include canonical URLs so that downstream consumers can cite the original content.
+- `stepintovision://post/{slug}` – Provides Markdown for a specific post.
 
-## Data Storage
+### Testing & Quality
 
-The `data/` directory is intentionally empty in git; each user generates their own `stepinto.db` via the ingestion CLI.
+- `npm run test` – Execute Vitest unit tests.
+- `npm run format` – Format with Biome.
+- `npm run lint` – Apply lint fixes.
+- `npm run check` – Run formatter and linter together.
+
+### Deployment
+
+The project targets Cloudflare Workers by default. Build the Worker bundle with:
+
+```bash
+npm run build
+```
+
+Then use [`wrangler`](https://developers.cloudflare.com/workers/wrangler/) to
+publish:
+
+```bash
+npx wrangler deploy
+```
+
+Regenerate type definitions for Worker bindings whenever configuration changes:
+
+```bash
+npm run cf-typegen
+```
+
+## License
+
+MIT. See [LICENSE.md](https://github.com/NSHipster/sosumi.ai/blob/main/LICENSE.md)
+for the upstream template.

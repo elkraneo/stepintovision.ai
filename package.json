@@ -1,0 +1,35 @@
+{
+  "name": "stepintovision.ai",
+  "version": "1.0.0",
+  "description": "Step Into Vision content service rewritten in TypeScript with Hono and MCP support.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts --dev",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "format": "biome format --write .",
+    "lint": "biome lint --apply .",
+    "check": "npm run format && npm run lint",
+    "cf-typegen": "wrangler types --out worker-configuration.d.ts",
+    "ingest": "tsx src/cli/ingest.ts"
+  },
+  "dependencies": {
+    "@hono/mcp": "^0.1.4",
+    "@hono/node-server": "^1.12.5",
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "fuse.js": "^7.0.0",
+    "hono": "^4.6.7",
+    "html-to-text": "^9.0.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.3",
+    "@types/node": "^22.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
