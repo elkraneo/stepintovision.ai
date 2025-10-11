@@ -79,7 +79,7 @@ describe("normalizeWordPressPost", () => {
     expect(post.title).toBe("Example & Test")
     expect(post.contentHtml).not.toContain("<script")
     expect(post.contentMarkdown).toContain("```swift")
-    expect(post.contentMarkdown).toContain("import SwiftUI")
+    expect(post.contentMarkdown).toContain("struct Example: View {}")
     expect(post.contentText).toContain("Main content")
     expect(post.seeAlso).toEqual([
       { title: "Example 1", url: "https://stepinto.vision/example-1/" },
@@ -152,7 +152,7 @@ describe("normalizeWordPressPost", () => {
     expect(post.contentMarkdown).not.toContain("xtension")
   })
 
-  it("labels glass background usage as Swift and normalizes Edge3D sets", () => {
+  it("labels glass background usage as Swift without mutating tokens", () => {
     const rawPost = {
       id: 300,
       slug: "glass-background",
@@ -175,15 +175,12 @@ glassBackgroundBox(padding: 12, .all)</code></pre>
 
     expect(post.contentMarkdown).toContain("```swift")
     expect(post.contentMarkdown).toContain(
-      ".glassBackgroundBox(padding: 12, [.top, .bottom])",
+      "glassBackgroundBox(padding: 12, .top, .bottom)",
     )
     expect(post.contentMarkdown).toContain(
-      ".glassBackgroundBox(padding: 12, .vertical)",
+      "glassBackgroundBox(padding: 12, .vertical)",
     )
-    expect(post.contentMarkdown).toContain(".glassBackgroundBox(padding: 12, .all)")
-    expect(post.contentMarkdown).not.toMatch(
-      /glassBackgroundBox\(padding:\s*12,\s*\.top,\s*\.bottom\)/,
-    )
+    expect(post.contentMarkdown).toContain("glassBackgroundBox(padding: 12, .all)")
   })
 
   it("falls back to numeric taxonomy IDs when embedded terms are absent", () => {

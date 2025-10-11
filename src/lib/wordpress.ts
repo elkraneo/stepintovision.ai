@@ -283,7 +283,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
   const readingTimeSeconds = Math.max(30, Math.round((wordCount / 200) * 60))
 
   const excerptHtml = sanitizeHtml(post.excerpt.rendered)
-  const excerpt = fixCommonGrammar(
+  const excerpt = applyGrammarFixesToProse(
     htmlToText(excerptHtml, {
       wordwrap: false,
       selectors: [{ selector: "a", options: { ignoreHref: true } }],
@@ -425,7 +425,7 @@ function normalizeHeroImage(media?: WordPressMedia): StepIntoVisionMedia | null 
   }
 }
 
-function fixCommonGrammar(value: string): string {
+function applyGrammarFixesToProse(value: string): string {
   return value
     .replace(/ways to values convert/gi, "ways to convert values")
     .replace(/\bxtension\b/gi, "extension")
@@ -445,12 +445,32 @@ function fixCommonGrammar(value: string): string {
       const prefix = match[0] === "M" ? "Mark" : "mark"
       return `${prefix} the ${normalizeResizableSubject(subject)} as resizable`
     })
-    .replace(/Could not load model \\\(name\\\)/g, "Could not load model.")
     .replace(/\\`/g, "`")
 }
 
 function normalizeResizableSubject(subject: string): string {
   return subject.replace(/\bearth\b/gi, "Earth").trim()
+}
+
+function normalizeProseNodes($: ReturnType<typeof load>) {
+  const nodes = $.root().find("*").addBack().contents().toArray()
+  for (const node of nodes) {
+    if (node.type !== "text") {
+      continue
+    }
+
+    const parent = node.parent as { name?: string } | undefined
+    const parentName = parent?.name?.toLowerCase?.() ?? ""
+    if (parentName && ["code", "pre", "script", "style", "textarea"].includes(parentName)) {
+      continue
+    }
+
+    const original = (node.data ?? "").toString()
+    const normalized = applyGrammarFixesToProse(original)
+    if (normalized !== original) {
+      node.data = normalized
+    }
+  }
 }
 
 function canonicalizeMarkdown(value: string): string {
@@ -510,16 +530,16 @@ function prepareContent(rawHtml: string): PreparedContent {
 
   $("div.wp-block-kevinbatdorf-code-block-pro").each((_, element) => {
     const textarea = $(element).find("textarea").first()
-    let codeText = textarea.text().replace(/\r\n/g, "\n").trim()
-    if (!codeText) {
+    let codeTextRaw = textarea.text().replace(/\r\n/g, "\n")
+    if (!codeTextRaw.trim()) {
       const codeElement = $(element).find("pre code").first()
-      codeText = codeElement.text().replace(/\r\n/g, "\n").trim()
+      codeTextRaw = codeElement.text().replace(/\r\n/g, "\n")
     }
-    if (!codeText) {
+    if (!codeTextRaw.trim()) {
       $(element).remove()
       return
     }
-    codeText = fixCommonGrammar(codeText)
+    const codeText = stripTrailingBlankLines(codeTextRaw)
     let language = inferCodeLanguage(codeText)
     if (!language) {
       const codeElement = $(element).find("code").first()
@@ -529,24 +549,18 @@ function prepareContent(rawHtml: string): PreparedContent {
         language = match[1]
       }
     }
-
-    if (language === "swift") {
-      codeText = normalizeSwiftCode(codeText)
-      codeText = ensureSwiftImports(codeText)
-    }
-
     const replacement = `<pre><code class="language-${language ?? "text"}">${escapeHtml(codeText)}</code></pre>`
     $(element).replaceWith(replacement)
   })
 
   $("pre code").each((_, element) => {
-    let codeText = $(element).text().replace(/\r\n/g, "\n").trim()
-    if (!codeText) {
+    let codeTextRaw = $(element).text().replace(/\r\n/g, "\n")
+    if (!codeTextRaw.trim()) {
       $(element).parent("pre").remove()
       return
     }
 
-    codeText = fixCommonGrammar(codeText)
+    const codeText = stripTrailingBlankLines(codeTextRaw)
     let language = inferCodeLanguage(codeText)
     if (!language) {
       const classAttr = $(element).attr("class") ?? ""
@@ -555,12 +569,6 @@ function prepareContent(rawHtml: string): PreparedContent {
         language = match[1].toLowerCase()
       }
     }
-
-    if (language === "swift") {
-      codeText = normalizeSwiftCode(codeText)
-      codeText = ensureSwiftImports(codeText)
-    }
-
     $(element).text(codeText)
 
     if (language) {
@@ -655,26 +663,26 @@ function prepareContent(rawHtml: string): PreparedContent {
   const assetData = collectAssetMetadata($)
   const videoUrl = collectVideoUrl($)
 
-  const cleanedHtml = fixCommonGrammar($.root().html()?.trim() ?? "")
+  normalizeProseNodes($)
+
+  const cleanedHtml = $.root().html()?.trim() ?? ""
 
   const markdown = turndown.turndown(cleanedHtml)
-  const normalizedMarkdown = canonicalizeMarkdown(fixCommonGrammar(markdown.trim()))
+  const normalizedMarkdown = canonicalizeMarkdown(markdown.trim())
   const baseReferences = collectReferenceLinks($)
   const references = augmentReferencesWithApiMentions(baseReferences, normalizedMarkdown)
 
-  const text = fixCommonGrammar(
-    htmlToText(cleanedHtml, {
-      wordwrap: false,
-      selectors: [
-        { selector: "a", options: { ignoreHref: true } },
-        { selector: "img", format: "skip" },
-      ],
-      preserveNewlines: true,
-    })
-      .replace(/\s+\n/g, "\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim(),
-  )
+  const text = htmlToText(cleanedHtml, {
+    wordwrap: false,
+    selectors: [
+      { selector: "a", options: { ignoreHref: true } },
+      { selector: "img", format: "skip" },
+    ],
+    preserveNewlines: true,
+  })
+    .replace(/\s+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
 
   return {
     html: cleanedHtml,
@@ -743,44 +751,8 @@ function escapeHtml(value: string): string {
     .replace(/>/g, "&gt;")
 }
 
-function ensureSwiftImports(code: string): string {
-  let result = code.trim()
-  const needsSwiftUI = !/\bimport\s+SwiftUI\b/.test(result) && /:\s*View\b/.test(result)
-  const needsRealityKit = !/\bimport\s+RealityKit\b/.test(result) && /\bRealityKit\b/.test(result)
-  const needsRealityKitContent =
-    !/\bimport\s+RealityKitContent\b/.test(result) && /\bRealityKitContent\b/.test(result)
-
-  const imports: string[] = []
-  if (needsSwiftUI) {
-    imports.push("import SwiftUI")
-  }
-  if (needsRealityKit) {
-    imports.push("import RealityKit")
-  }
-  if (needsRealityKitContent) {
-    imports.push("import RealityKitContent")
-  }
-
-  if (imports.length === 0) {
-    return result
-  }
-
-  return `${imports.join("\n")}\n\n${result}`
-}
-
-function normalizeSwiftCode(code: string): string {
-  let result = code
-
-  result = result.replace(/(^|\n)(\s*)glassBackgroundBox\s*\(/g, (_, prefix, indent) => {
-    return `${prefix}${indent}.glassBackgroundBox(`
-  })
-
-  result = result.replace(
-    /\.glassBackgroundBox\(\s*padding:\s*([^,]+),\s*\.top\s*,\s*\.bottom\s*\)/g,
-    (_, padding) => `.glassBackgroundBox(padding: ${padding.trim()}, [.top, .bottom])`,
-  )
-
-  return result
+function stripTrailingBlankLines(value: string): string {
+  return value.replace(/(?:[ \t]*\n)*[ \t]*$/u, (match) => (match.includes("\n") ? "" : match))
 }
 
 function collectReferenceLinks($: ReturnType<typeof load>): StepIntoVisionSeeAlsoItem[] {
