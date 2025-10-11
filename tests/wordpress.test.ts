@@ -83,14 +83,16 @@ describe("normalizeWordPressPost", () => {
     expect(post.seeAlso).toEqual([
       { title: "Example 1", url: "https://stepinto.vision/example-1/" },
     ])
-    expect(post.developerLinks).toEqual([
+    expect(post.links).toEqual([
       {
-        title: "GitHub Repo",
+        role: "repo",
         url: "https://github.com/stepintovision/realitykit-sample",
+        title: "GitHub Repo",
       },
       {
-        title: "Download ZIP",
+        role: "download",
         url: "https://github.com/stepintovision/realitykit-sample/archive/refs/heads/main.zip",
+        title: "Download ZIP",
       },
     ])
     expect(post.references).toEqual([
@@ -130,10 +132,6 @@ describe("normalizeWordPressPost", () => {
         height: 480,
       },
     ])
-    expect(post.repoUrl).toBe("https://github.com/stepintovision/realitykit-sample")
-    expect(post.downloadUrl).toBe(
-      "https://github.com/stepintovision/realitykit-sample/archive/refs/heads/main.zip",
-    )
     expect(post.assetSourceUrl).toBe("https://opengameart.org/content/a-bird-animation")
     expect(post.assetAuthor).toBe("komiro100")
     expect(post.assetLicense).toBe("CC0")

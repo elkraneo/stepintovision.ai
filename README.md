@@ -106,32 +106,34 @@ Resource templates:
   parse the Markdown. MCP annotations are limited to the protocol hints
   (`audience`, `priority`, `lastModified`).
 - `stepintovision://post/{slug}/meta` – JSON payload conforming to
-  `mcp.post.v1` that mirrors sosumi.ai’s structured document. The Markdown
-  resource references this URI via `_meta.metaUri`.
+  `mcp.post.v1`. The Markdown resource references this URI via `_meta.metaUri`
+  so hosts can hydrate richer metadata without parsing the Markdown body.
 
 ### MCP metadata
 
-Each Markdown resource includes `_meta` fields with:
+Each Markdown resource includes a compact `_meta` block with:
 
-- Identity: `schema`, `canonicalUrl`, `markdownUri`, `metaUri`, `mcpResource`.
-- Provenance: ISO-8601 `publishedAt`, `updatedAt`, author, license, version,
-  and SHA-256 `contentDigest`.
-- Format hints: locale, `summary` (from the post excerpt), `contentType`,
-  `wordCount`, `tokenCount`, `readingTimeSeconds`.
-- Normalization flags: `normalized` is `true` when the article body has been
-  grammar-fixed or deduplicated; `verbatim` remains `false` for the curated
-  Markdown we serve.
-- Relationships & references: categories, tags, hero image metadata, additional
-  inline media, `seeAlso`, machine-friendly `references` (Apple documentation,
-  etc.), developer-focused links (e.g., GitHub repository and download URLs),
-  `alternateUrls.aiReadable`, and provenance fields for downloadable labs and
-  art assets (`repoIndexUrl`, `downloadUrl`, `videoUrl`, `assetSourceUrl`,
-  `assetAuthor`, `assetLicense`).
+- Identity: `schema`, `canonicalUrl`, `markdownUri`, `metaUri`, and
+  `contentType`.
+- Provenance: ISO-8601 `publishedAt`, `updatedAt`, author name, `version`, and
+  SHA-256 `contentDigest`.
+- Summary: human-readable excerpt plus `normalized` / `verbatim` flags that
+  describe how the Markdown was curated.
 
-The JSON metadata companion exposes the same information plus the `schema`
-version in a machine-friendly document. The Markdown body continues to be
-generated from sanitized WordPress HTML with language-tagged code fences and a
-derived `## See Also` section when available.
+The JSON metadata companion (`stepintovision://post/{slug}/meta`) expands on the
+basics with the complete `mcp.post.v1` document:
+
+- Content facts: `summary`, locale, categories, tags, counters (`wordCount`,
+  `tokenCount`, `readingTimeSeconds`).
+- Relationships: `seeAlso`, API `references`, GitHub `links` (roles include
+  `repo`, `download`, and `docs`), and optional `videoUrl`.
+- Media: hero/inline media with meaningful alt text, plus optional asset
+  provenance (`assetSourceUrl`, `assetAuthor`, `assetLicense`).
+- Integrity: immutable `version` and canonical `contentDigest` so hosts can
+  detect changes without fetching the Markdown body.
+
+The Markdown body itself remains sanitized WordPress content with language-
+tagged code fences and an optional derived `## See Also` section.
 
 ### Testing & Quality
 

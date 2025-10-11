@@ -3,7 +3,7 @@ export type StepIntoVisionMediaRole = "hero" | "illustration" | "video"
 export interface StepIntoVisionMedia {
   role: StepIntoVisionMediaRole
   url: string
-  alt?: string | null
+  alt: string
   width?: number | null
   height?: number | null
 }
@@ -11,6 +11,14 @@ export interface StepIntoVisionMedia {
 export interface StepIntoVisionSeeAlsoItem {
   title: string
   url: string
+}
+
+export type StepIntoVisionLinkRole = "download" | "repo" | "docs" | "video" | "asset"
+
+export interface StepIntoVisionLink {
+  role: StepIntoVisionLinkRole
+  url: string
+  title?: string
 }
 
 export interface StepIntoVisionPost {
@@ -37,12 +45,10 @@ export interface StepIntoVisionPost {
   normalized: boolean
   verbatim: boolean
   seeAlso: StepIntoVisionSeeAlsoItem[]
-  developerLinks: StepIntoVisionSeeAlsoItem[]
   references: StepIntoVisionSeeAlsoItem[]
+  links: StepIntoVisionLink[]
   contentDigest: string
   media: StepIntoVisionMedia[]
-  repoUrl?: string | null
-  downloadUrl?: string | null
   videoUrl?: string | null
   assetSourceUrl?: string | null
   assetAuthor?: string | null
@@ -55,36 +61,38 @@ export interface StepIntoVisionPostMetaDocument {
   slug: string
   title: string
   description: string
+  summary: string
   locale: string
   canonicalUrl: string
   markdownUri: string
-  mcpResource: string
-  summary: string
   publishedAt: string
   updatedAt: string
   categories: string[]
   tags: string[]
-  author: string
-  license: string
-  version: number
+  author: {
+    name: string
+    url?: string
+  }
+  license: {
+    type: string
+    url?: string
+  }
   contentType: "text/markdown"
   wordCount: number
   tokenCount: number
   readingTimeSeconds: number
   normalized: boolean
   verbatim: boolean
-  heroImage?: StepIntoVisionMedia | null
   media: StepIntoVisionMedia[]
   seeAlso: StepIntoVisionSeeAlsoItem[]
-  developerLinks: StepIntoVisionSeeAlsoItem[]
   references: StepIntoVisionSeeAlsoItem[]
+  links: StepIntoVisionLink[]
+  videoUrl?: string
+  assetSourceUrl?: string
+  assetAuthor?: string
+  assetLicense?: string
+  version: number
   contentDigest: string
-  repoUrl?: string | null
-  downloadUrl?: string | null
-  videoUrl?: string | null
-  assetSourceUrl?: string | null
-  assetAuthor?: string | null
-  assetLicense?: string | null
 }
 
 export interface CatalogMetadata {

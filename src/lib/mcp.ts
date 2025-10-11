@@ -8,15 +8,6 @@ import type { StepIntoVisionPost, StepIntoVisionPostMetaDocument } from "./types
 const MARKDOWN_MIME_TYPE = "text/markdown"
 const JSON_MIME_TYPE = "application/json"
 
-function buildAiReadableUrl(post: StepIntoVisionPost): string {
-  try {
-    const { pathname } = new URL(post.link)
-    return `https://stepintovision.ai${pathname}`
-  } catch {
-    return `https://stepintovision.ai/${post.slug}`
-  }
-}
-
 function toIsoString(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
@@ -42,53 +33,28 @@ function buildMetaName(post: StepIntoVisionPost): string {
 }
 
 function buildResourceMeta(post: StepIntoVisionPost): Record<string, unknown> {
-  const heroImage =
-    post.media.find((item) => item.role === "hero") ?? post.heroImage ?? null
-  const media = post.media.length > 0 ? post.media : heroImage ? [heroImage] : []
   const markdownUri = buildResourceUri(post)
   return {
     schema: "mcp.post.v1",
     canonicalUrl: post.link,
     markdownUri,
     metaUri: buildMetaUri(post),
-    mcpResource: markdownUri,
     contentType: MARKDOWN_MIME_TYPE,
     publishedAt: toIsoString(post.publishedAt),
     updatedAt: toIsoString(post.updatedAt),
-    locale: post.locale,
-    author: post.author,
-    license: post.license,
-    version: post.version,
+    author: { name: post.author },
     summary: post.excerpt,
     normalized: post.normalized,
     verbatim: post.verbatim,
-    categories: post.categories,
-    tags: post.tags,
-    heroImage,
-    media,
-    seeAlso: post.seeAlso,
-    developerLinks: post.developerLinks,
-    references: post.references,
-    wordCount: post.wordCount,
-    tokenCount: post.tokenCount,
-    readingTimeSeconds: post.readingTimeSeconds,
+    version: post.version,
     contentDigest: post.contentDigest,
-    repoIndexUrl: post.repoUrl ?? null,
-    downloadUrl: post.downloadUrl ?? null,
-    videoUrl: post.videoUrl ?? null,
-    assetSourceUrl: post.assetSourceUrl ?? null,
-    assetAuthor: post.assetAuthor ?? null,
-    assetLicense: post.assetLicense ?? null,
-    alternateUrls: {
-      aiReadable: buildAiReadableUrl(post),
-    },
   }
 }
 
 function buildResourceItem(post: StepIntoVisionPost) {
   return {
     uri: buildResourceUri(post),
-    name: post.slug,
+    name: buildMarkdownName(post),
     title: post.title,
     description: post.excerpt,
     mimeType: MARKDOWN_MIME_TYPE,
@@ -102,54 +68,66 @@ function buildResourceItem(post: StepIntoVisionPost) {
 }
 
 function buildMetaDocument(post: StepIntoVisionPost): StepIntoVisionPostMetaDocument {
-  const heroImage =
-    post.media.find((item) => item.role === "hero") ?? post.heroImage ?? null
-  const media = post.media.length > 0 ? post.media : heroImage ? [heroImage] : []
   const markdownUri = buildResourceUri(post)
-  return {
+  const meta: StepIntoVisionPostMetaDocument = {
     schema: "mcp.post.v1",
     id: String(post.id),
     slug: post.slug,
     title: post.title,
     description: post.excerpt,
+    summary: post.excerpt,
     locale: post.locale,
     canonicalUrl: post.link,
     markdownUri,
-    mcpResource: markdownUri,
-    summary: post.excerpt,
     publishedAt: toIsoString(post.publishedAt),
     updatedAt: toIsoString(post.updatedAt),
     categories: post.categories,
     tags: post.tags,
-    author: post.author,
-    license: post.license,
-    version: post.version,
+    author: { name: post.author },
+    license: { type: post.license },
     contentType: MARKDOWN_MIME_TYPE,
     wordCount: post.wordCount,
     tokenCount: post.tokenCount,
     readingTimeSeconds: post.readingTimeSeconds,
     normalized: post.normalized,
     verbatim: post.verbatim,
-    heroImage,
-    media,
+    media: post.media.map((item) => ({
+      role: item.role,
+      url: item.url,
+      alt: item.alt,
+      ...(item.width ? { width: item.width } : {}),
+      ...(item.height ? { height: item.height } : {}),
+    })),
     seeAlso: post.seeAlso,
-    developerLinks: post.developerLinks,
     references: post.references,
+    links: post.links.map((link) => ({
+      role: link.role,
+      url: link.url,
+      ...(link.title ? { title: link.title } : {}),
+    })),
+    version: post.version,
     contentDigest: post.contentDigest,
-    repoUrl: post.repoUrl ?? null,
-    downloadUrl: post.downloadUrl ?? null,
-    videoUrl: post.videoUrl ?? null,
-    assetSourceUrl: post.assetSourceUrl ?? null,
-    assetAuthor: post.assetAuthor ?? null,
-    assetLicense: post.assetLicense ?? null,
   }
+  if (post.videoUrl) {
+    meta.videoUrl = post.videoUrl
+  }
+  if (post.assetSourceUrl) {
+    meta.assetSourceUrl = post.assetSourceUrl
+  }
+  if (post.assetAuthor) {
+    meta.assetAuthor = post.assetAuthor
+  }
+  if (post.assetLicense) {
+    meta.assetLicense = post.assetLicense
+  }
+  return meta
 }
 
 function buildMetaResourceItem(post: StepIntoVisionPost) {
   const metaDocument = buildMetaDocument(post)
   return {
     uri: buildMetaUri(post),
-    name: `${post.slug}-meta`,
+    name: buildMetaName(post),
     title: `${post.title} metadata`,
     description: `Structured metadata for ${post.title}`,
     mimeType: JSON_MIME_TYPE,
@@ -160,12 +138,9 @@ function buildMetaResourceItem(post: StepIntoVisionPost) {
     _meta: {
       canonicalUrl: metaDocument.canonicalUrl,
       markdownUri: metaDocument.markdownUri,
-      mcpResource: metaDocument.mcpResource,
       schema: metaDocument.schema,
       contentDigest: metaDocument.contentDigest,
-      suggestedFileName: buildMetaName(post),
-      normalized: metaDocument.normalized,
-      verbatim: metaDocument.verbatim,
+      version: metaDocument.version,
     },
   }
 }
@@ -293,9 +268,9 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
             _meta: {
               canonicalUrl: metaDocument.canonicalUrl,
               markdownUri: metaDocument.markdownUri,
-              mcpResource: metaDocument.mcpResource,
               schema: metaDocument.schema,
               contentDigest: metaDocument.contentDigest,
+              version: metaDocument.version,
             },
           },
         ],

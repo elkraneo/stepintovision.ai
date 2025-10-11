@@ -9,6 +9,8 @@ import type {
   StepIntoVisionPost,
   StepIntoVisionSeeAlsoItem,
   StepIntoVisionMedia,
+  StepIntoVisionLink,
+  StepIntoVisionLinkRole,
 } from "./types"
 
 export interface WordPressIngestOptions {
@@ -245,11 +247,9 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
   const contentMarkdown = prepared.markdown
   const contentText = prepared.text
   const seeAlso = prepared.seeAlso
-  const developerLinks = prepared.developerLinks
   const references = prepared.references
   const mediaItems = prepared.media
-  const repoUrl = prepared.repoUrl
-  const downloadUrl = prepared.downloadUrl
+  const links = prepared.links
   const videoUrl = prepared.videoUrl
   const assetSourceUrl = prepared.assetSourceUrl
   const assetAuthor = prepared.assetAuthor
@@ -298,11 +298,9 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     normalized: true,
     verbatim: false,
     seeAlso,
-    developerLinks,
     references,
+    links,
     contentDigest: `sha256-${contentDigest}`,
-    repoUrl,
-    downloadUrl,
     videoUrl,
     assetSourceUrl,
     assetAuthor,
@@ -387,10 +385,17 @@ function normalizeHeroImage(media?: WordPressMedia): StepIntoVisionMedia | null 
     return null
   }
 
+  const url = cleanUrl(media.source_url) ?? media.source_url
+  const alt = media.alt_text?.trim()
+
+  if (!alt) {
+    return null
+  }
+
   return {
     role: "hero",
-    url: cleanUrl(media.source_url) ?? media.source_url,
-    alt: media.alt_text ?? null,
+    url,
+    alt,
     width: media.media_details?.width ?? null,
     height: media.media_details?.height ?? null,
   }
@@ -407,11 +412,9 @@ interface PreparedContent {
   markdown: string
   text: string
   seeAlso: StepIntoVisionSeeAlsoItem[]
-  developerLinks: StepIntoVisionSeeAlsoItem[]
   references: StepIntoVisionSeeAlsoItem[]
   media: StepIntoVisionMedia[]
-  repoUrl: string | null
-  downloadUrl: string | null
+  links: StepIntoVisionLink[]
   videoUrl: string | null
   assetSourceUrl: string | null
   assetAuthor: string | null
@@ -591,7 +594,7 @@ function prepareContent(rawHtml: string): PreparedContent {
   })
 
   const references = collectReferenceLinks($)
-  const developerData = collectDeveloperLinks($)
+  const links = collectDeveloperLinks($)
   const assetData = collectAssetMetadata($)
   const videoUrl = collectVideoUrl($)
 
@@ -619,11 +622,9 @@ function prepareContent(rawHtml: string): PreparedContent {
     markdown: normalizedMarkdown,
     text,
     seeAlso: dedupeSeeAlso(seeAlsoItems),
-    developerLinks: developerData.links,
     references,
     media: dedupeMedia(mediaItems),
-    repoUrl: developerData.repoUrl,
-    downloadUrl: developerData.downloadUrl,
+    links,
     videoUrl,
     assetSourceUrl: assetData.assetSourceUrl,
     assetAuthor: assetData.assetAuthor,
@@ -765,6 +766,19 @@ function dedupeSeeAlso(items: StepIntoVisionSeeAlsoItem[]): StepIntoVisionSeeAls
   return result
 }
 
+function dedupeLinks(items: StepIntoVisionLink[]): StepIntoVisionLink[] {
+  const seen = new Set<string>()
+  const result: StepIntoVisionLink[] = []
+  for (const item of items) {
+    const key = `${item.role}|${item.url}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      result.push(item)
+    }
+  }
+  return result
+}
+
 function isReferenceHost(hostname: string): boolean {
   return REFERENCE_HOSTS.some((allowed) =>
     hostname === allowed || hostname.endsWith(`.${allowed}`),
@@ -776,48 +790,37 @@ function parseDimension(value: string): number | null {
   return Number.isNaN(numeric) ? null : numeric
 }
 
-interface DeveloperLinkCollection {
-  links: StepIntoVisionSeeAlsoItem[]
-  repoUrl: string | null
-  downloadUrl: string | null
-}
-
-function collectDeveloperLinks($: ReturnType<typeof load>): DeveloperLinkCollection {
-  const links: StepIntoVisionSeeAlsoItem[] = []
-  let repoUrl: string | null = null
-  let downloadUrl: string | null = null
+function collectDeveloperLinks($: ReturnType<typeof load>): StepIntoVisionLink[] {
+  const links: StepIntoVisionLink[] = []
 
   $("a[href]").each((_, element) => {
     const href = $(element).attr("href")?.trim()
     if (!href) {
       return
     }
+
     const normalizedHref = cleanUrl(href)
     if (!normalizedHref || !normalizedHref.includes("github.com")) {
       return
     }
-    const title = $(element).text().trim() || normalizedHref
-    links.push({ title, url: normalizedHref })
 
-    const lowerTitle = title.toLowerCase()
     const lowerHref = normalizedHref.toLowerCase()
-    if (!repoUrl && !lowerHref.includes("/archive/")) {
-      repoUrl = normalizedHref
+    const text = $(element).text().trim()
+    const title = text || normalizedHref
+
+    let role: StepIntoVisionLinkRole = "repo"
+    if (lowerHref.endsWith(".zip") || lowerHref.includes("/archive/")) {
+      role = "download"
     }
-    const suggestsDownload =
-      lowerTitle.includes("download") ||
-      lowerHref.includes("/archive/") ||
-      lowerHref.endsWith(".zip")
-    if (!downloadUrl && suggestsDownload) {
-      downloadUrl = normalizedHref
-    }
+
+    links.push({
+      role,
+      url: normalizedHref,
+      title,
+    })
   })
 
-  return {
-    links: dedupeSeeAlso(links),
-    repoUrl,
-    downloadUrl,
-  }
+  return dedupeLinks(links)
 }
 
 interface AssetMetadata {
