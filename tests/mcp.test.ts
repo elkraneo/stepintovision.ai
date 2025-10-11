@@ -73,7 +73,9 @@ describe("MCP resource metadata", () => {
       normalizedScope: "prose",
     })
     expect(Array.isArray(meta.keywords)).toBe(true)
-    expect(meta.keywords).toContain("Example Code")
+    expect(meta.keywords).toEqual(
+      expect.arrayContaining(["RealityKit", "Spatial", "Model3D", "swiftui"]),
+    )
     const codeMeta = (meta.code ?? {}) as { blocks?: unknown[] }
     expect(Array.isArray(codeMeta.blocks)).toBe(true)
     expect(codeMeta.blocks?.length ?? 0).toBeGreaterThan(0)
@@ -105,7 +107,9 @@ describe("MCP resource metadata", () => {
     expect(metaDocument.code.blocks.length).toBeGreaterThan(0)
     expect(metaDocument.contentDigest).toMatch(/^sha256-/)
     expect(metaDocument.normalizedScope).toBe("prose")
-    expect(metaDocument.keywords).toContain("Example Code")
+    expect(metaDocument.keywords).toEqual(
+      expect.arrayContaining(["RealityKit", "Spatial", "Model3D", "swiftui"]),
+    )
   })
 
   it("throws when stored digests do not match canonical output", () => {

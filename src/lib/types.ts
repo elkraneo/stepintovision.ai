@@ -20,6 +20,31 @@ export type StepIntoVisionLinkRole =
   | "video"
   | "asset"
   | "series"
+  | "discussion"
+
+export interface StepIntoVisionStatusAppliesTo {
+  product: string
+  versions?: string[]
+}
+
+export type StepIntoVisionStatusType =
+  | "limitation"
+  | "advisory"
+  | "deprecation"
+  | "availability"
+
+export type StepIntoVisionStatusStability =
+  | "likely_to_change"
+  | "unlikely_to_change"
+  | "unknown"
+
+export interface StepIntoVisionStatus {
+  type: StepIntoVisionStatusType
+  stability?: StepIntoVisionStatusStability
+  appliesTo?: StepIntoVisionStatusAppliesTo
+  asOf?: string
+  note?: string
+}
 
 export interface StepIntoVisionLink {
   role: StepIntoVisionLinkRole
@@ -79,6 +104,7 @@ export interface StepIntoVisionPost {
   assetAuthor?: string | null
   assetLicense?: string | null
   code: StepIntoVisionCodeMetadata
+  status?: StepIntoVisionStatus | null
 }
 
 export interface StepIntoVisionPostMetaDocument {
@@ -120,6 +146,7 @@ export interface StepIntoVisionPostMetaDocument {
   assetAuthor?: string
   assetLicense?: string
   keywords?: string[]
+  status?: StepIntoVisionStatus
   version: number
   contentDigest: string
 }

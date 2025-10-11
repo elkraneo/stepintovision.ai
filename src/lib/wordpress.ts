@@ -9,6 +9,7 @@ import type {
   StepIntoVisionMedia,
   StepIntoVisionLink,
   StepIntoVisionLinkRole,
+  StepIntoVisionStatus,
 } from "./types"
 import { canonicalizeMarkdown } from "./markdown-utils"
 import { buildRenderedPostMarkdown } from "./markdown"
@@ -76,6 +77,20 @@ const USER_AGENT = "stepinto-vision-ingest/1.0 (+https://stepinto.vision)"
 const DEFAULT_LOCALE = "en"
 const DEFAULT_LICENSE = "AllRightsReserved"
 const DEFAULT_AUTHOR = "Step Into Vision"
+const MONTH_LOOKUP: Record<string, number> = {
+  january: 0,
+  february: 1,
+  march: 2,
+  april: 3,
+  may: 4,
+  june: 5,
+  july: 6,
+  august: 7,
+  september: 8,
+  october: 9,
+  november: 10,
+  december: 11,
+}
 
 const turndown = new TurndownService({
   codeBlockStyle: "fenced",
@@ -264,7 +279,10 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     : []
   const heroImage = normalizeHeroImage(mediaGroups[0])
 
-  const prepared = prepareContent(post.content.rendered)
+  const prepared = prepareContent(post.content.rendered, {
+    publishedAt: post.date,
+    updatedAt: post.modified,
+  })
   const contentHtml = prepared.html
   const contentMarkdown = prepared.markdown
   const contentText = prepared.text
@@ -276,6 +294,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
   const assetSourceUrl = prepared.assetSourceUrl
   const assetAuthor = prepared.assetAuthor
   const assetLicense = inferAssetLicense(assetSourceUrl, prepared.assetLicense)
+  const status = prepared.status
   const media = buildMediaList(heroImage, mediaItems)
   const authorName = extractAuthorName(post)
   const wordCount = contentText.split(/\s+/).filter(Boolean).length
@@ -304,7 +323,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     wordCount,
     tokenCount,
     readingTimeSeconds,
-    link: post.link,
+    link: cleanUrl(post.link) ?? post.link,
     publishedAt: post.date,
     updatedAt: post.modified,
     categories: dedupeStrings(categories),
@@ -327,6 +346,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     assetAuthor,
     assetLicense,
     code: { policy: "verbatim", blocks: [] },
+    status,
   }
 
   const rendered = buildRenderedPostMarkdown(normalizedPost)
@@ -401,10 +421,21 @@ function cleanUrl(url: string | undefined): string | undefined {
   try {
     const parsed = new URL(url)
     parsed.search = ""
-    if (parsed.hash === "#") {
-      parsed.hash = ""
+    if (parsed.hash) {
+      const lowerHash = parsed.hash.toLowerCase()
+      const shouldStripHash =
+        lowerHash === "#" ||
+        lowerHash.startsWith("#?") ||
+        lowerHash.includes("secret=") ||
+        lowerHash.includes("login") ||
+        lowerHash.includes("si=") ||
+        parsed.hostname.toLowerCase().includes("forums.developer.apple.com")
+      if (shouldStripHash) {
+        parsed.hash = ""
+      }
     }
-    return parsed.toString()
+    const result = parsed.toString()
+    return result.endsWith("#") ? result.slice(0, -1) : result
   } catch {
     return url
   }
@@ -480,6 +511,11 @@ function normalizeProseNodes($: ReturnType<typeof load>) {
   }
 }
 
+interface PrepareContentContext {
+  publishedAt?: string
+  updatedAt?: string
+}
+
 interface PreparedContent {
   html: string
   markdown: string
@@ -492,9 +528,10 @@ interface PreparedContent {
   assetSourceUrl: string | null
   assetAuthor: string | null
   assetLicense: string | null
+  status: StepIntoVisionStatus | null
 }
 
-function prepareContent(rawHtml: string): PreparedContent {
+function prepareContent(rawHtml: string, context: PrepareContentContext = {}): PreparedContent {
   const $ = load(rawHtml)
 
   $("script, style").remove()
@@ -654,11 +691,13 @@ function prepareContent(rawHtml: string): PreparedContent {
     }
   })
 
-  const links = collectDeveloperLinks($)
+  const developerLinks = collectDeveloperLinks($)
   const assetData = collectAssetMetadata($)
   const videoUrl = collectVideoUrl($)
 
   normalizeProseNodes($)
+
+  const status = extractStatus($, context)
 
   const cleanedHtml = $.root().html()?.trim() ?? ""
 
@@ -666,6 +705,7 @@ function prepareContent(rawHtml: string): PreparedContent {
   const normalizedMarkdown = canonicalizeMarkdown(markdown.trim())
   const baseReferences = collectReferenceLinks($)
   const references = augmentReferencesWithApiMentions(baseReferences, normalizedMarkdown)
+  const links = filterLinksAgainstReferences(developerLinks, references)
 
   const text = htmlToText(cleanedHtml, {
     wordwrap: false,
@@ -691,6 +731,7 @@ function prepareContent(rawHtml: string): PreparedContent {
     assetSourceUrl: assetData.assetSourceUrl,
     assetAuthor: assetData.assetAuthor,
     assetLicense: assetData.assetLicense,
+    status,
   }
 }
 
@@ -825,6 +866,17 @@ function dedupeLinks(items: StepIntoVisionLink[]): StepIntoVisionLink[] {
   return result
 }
 
+function filterLinksAgainstReferences(
+  links: StepIntoVisionLink[],
+  references: StepIntoVisionSeeAlsoItem[],
+): StepIntoVisionLink[] {
+  if (references.length === 0) {
+    return links
+  }
+  const referenceUrls = new Set(references.map((reference) => reference.url))
+  return links.filter((link) => !(referenceUrls.has(link.url) && link.role === "docs"))
+}
+
 function isReferenceHost(hostname: string): boolean {
   return REFERENCE_HOSTS.some((allowed) =>
     hostname === allowed || hostname.endsWith(`.${allowed}`),
@@ -868,6 +920,8 @@ function collectDeveloperLinks($: ReturnType<typeof load>): StepIntoVisionLink[]
     let role: StepIntoVisionLinkRole | null = null
     if (hostname.includes("github.com")) {
       role = lowerHref.endsWith(".zip") || lowerHref.includes("/archive/") ? "download" : "repo"
+    } else if (hostname.includes("forums.developer.apple.com")) {
+      role = "discussion"
     } else if (hostname.includes("developer.apple.com")) {
       role = "docs"
     } else if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) {
@@ -888,6 +942,109 @@ function collectDeveloperLinks($: ReturnType<typeof load>): StepIntoVisionLink[]
   })
 
   return dedupeLinks(links)
+}
+
+function normalizeVersion(version: string): string {
+  const trimmed = version.trim()
+  if (!trimmed) {
+    return trimmed
+  }
+  if (/^\d+$/.test(trimmed)) {
+    return `${trimmed}.x`
+  }
+  return trimmed
+}
+
+function toIsoDate(value?: string): string | undefined {
+  if (!value) {
+    return undefined
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return undefined
+  }
+  return date.toISOString()
+}
+
+function parseAsOfDate(text: string, fallback?: string): string | undefined {
+  const isoMatch = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/)
+  if (isoMatch) {
+    const parsed = new Date(`${isoMatch[1]}T00:00:00Z`)
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString()
+    }
+  }
+
+  const monthDayMatch = text.match(/As of\s+([A-Za-z]+\s+\d{1,2},?\s*\d{4})/i)
+  if (monthDayMatch) {
+    const parsed = new Date(monthDayMatch[1])
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString()
+    }
+  }
+
+  const monthYearMatch = text.match(/As of\s+([A-Za-z]+)\s+(\d{4})/i)
+  if (monthYearMatch) {
+    const monthName = monthYearMatch[1].toLowerCase()
+    const year = Number.parseInt(monthYearMatch[2], 10)
+    const monthIndex = MONTH_LOOKUP[monthName as keyof typeof MONTH_LOOKUP]
+    if (!Number.isNaN(year) && typeof monthIndex === "number") {
+      const parsed = new Date(Date.UTC(year, monthIndex, 1))
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString()
+      }
+    }
+  }
+
+  return toIsoDate(fallback)
+}
+
+function extractStatus(
+  $: ReturnType<typeof load>,
+  context: PrepareContentContext,
+): StepIntoVisionStatus | null {
+  let note: string | null = null
+
+  $("p, li").each((_, element) => {
+    const text = $(element).text().trim()
+    if (!text) {
+      return
+    }
+    if (!/as of/i.test(text)) {
+      return
+    }
+    if (!/(not supported|cannot|can't|isn't supported|not available)/i.test(text)) {
+      return
+    }
+    note = text.replace(/\s+/g, " ").trim()
+    return false
+  })
+
+  if (!note) {
+    return null
+  }
+
+  const status: StepIntoVisionStatus = {
+    type: "limitation",
+    stability: "likely_to_change",
+    note,
+  }
+
+  if (/visionos/i.test(note)) {
+    const versionMatch = note.match(/visionos\s*([0-9][0-9.]*)/i)
+    const appliesTo = { product: "visionOS" as const }
+    if (versionMatch) {
+      appliesTo.versions = [normalizeVersion(versionMatch[1])]
+    }
+    status.appliesTo = appliesTo
+  }
+
+  const asOf = parseAsOfDate(note, context.updatedAt ?? context.publishedAt)
+  if (asOf) {
+    status.asOf = asOf
+  }
+
+  return status
 }
 
 interface AssetMetadata {

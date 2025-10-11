@@ -46,21 +46,126 @@ function ensureContentDigest(post: StepIntoVisionPost, rendered: RenderedPostMar
   }
 }
 
+const STOP_KEYWORDS = new Set([
+  "example code",
+  "news",
+  "uncategorized",
+  "updates",
+])
+
+const SLUG_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "can",
+  "for",
+  "how",
+  "in",
+  "is",
+  "of",
+  "on",
+  "the",
+  "to",
+  "use",
+  "using",
+  "we",
+  "what",
+  "with",
+])
+
+function normalizeKeyword(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+  if (STOP_KEYWORDS.has(trimmed.toLowerCase())) {
+    return null
+  }
+  return trimmed
+}
+
+function addKeyword(store: Map<string, string>, value: string) {
+  const normalized = normalizeKeyword(value)
+  if (!normalized) {
+    return
+  }
+  const key = normalized.toLowerCase()
+  if (!store.has(key)) {
+    store.set(key, normalized)
+  }
+}
+
+function collectInlineCodeKeywords(markdown: string): string[] {
+  const matches = markdown.match(/`([^`]+)`/g) ?? []
+  const tokens: string[] = []
+  for (const match of matches) {
+    const token = match.slice(1, -1).trim()
+    if (token.length < 3) {
+      continue
+    }
+    if (/^[a-z0-9\-]+$/i.test(token)) {
+      tokens.push(token)
+    }
+  }
+  return tokens
+}
+
+function collectReferenceKeywords(post: StepIntoVisionPost): string[] {
+  const keywords: string[] = []
+  for (const reference of post.references) {
+    const parts = reference.title.split(/[^A-Za-z0-9_.]+/)
+    for (const part of parts) {
+      if (!part) {
+        continue
+      }
+      if (/^[A-Z][A-Za-z0-9_.]*$/.test(part)) {
+        keywords.push(part)
+      }
+    }
+  }
+  return keywords
+}
+
+function collectSlugKeywords(slug: string): string[] {
+  const parts = slug.split(/[-_]+/)
+  const result: string[] = []
+  for (const part of parts) {
+    const lower = part.toLowerCase()
+    if (!lower || SLUG_STOP_WORDS.has(lower)) {
+      continue
+    }
+    if (lower.length >= 3 && /^[a-z0-9]+$/.test(lower)) {
+      result.push(lower)
+    }
+  }
+  return result
+}
+
 function buildKeywords(post: StepIntoVisionPost): string[] {
-  const keywords = new Set<string>()
+  const keywordMap = new Map<string, string>()
+
   for (const category of post.categories) {
-    const normalized = category.trim()
-    if (normalized) {
-      keywords.add(normalized)
-    }
+    addKeyword(keywordMap, category)
   }
+
   for (const tag of post.tags) {
-    const normalized = tag.trim()
-    if (normalized) {
-      keywords.add(normalized)
-    }
+    addKeyword(keywordMap, tag)
   }
-  return Array.from(keywords)
+
+  for (const token of collectInlineCodeKeywords(post.contentMarkdown)) {
+    addKeyword(keywordMap, token)
+  }
+
+  for (const token of collectReferenceKeywords(post)) {
+    addKeyword(keywordMap, token)
+  }
+
+  for (const token of collectSlugKeywords(post.slug)) {
+    addKeyword(keywordMap, token)
+  }
+
+  return Array.from(keywordMap.values()).sort((a, b) => a.localeCompare(b))
 }
 
 export function buildResourceMeta(
@@ -88,6 +193,7 @@ export function buildResourceMeta(
     contentDigest: computed.contentDigest,
     code: computed.code,
     ...(keywords.length > 0 ? { keywords } : {}),
+    ...(post.status ? { status: post.status } : {}),
   }
 }
 
@@ -159,6 +265,9 @@ export function buildMetaDocument(
   }
   if (keywords.length > 0) {
     meta.keywords = keywords
+  }
+  if (post.status) {
+    meta.status = post.status
   }
   if (post.videoUrl) {
     meta.videoUrl = post.videoUrl

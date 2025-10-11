@@ -93,11 +93,6 @@ describe("normalizeWordPressPost", () => {
     ])
     expect(post.links).toEqual([
       {
-        role: "docs",
-        url: "https://developer.apple.com/documentation/swiftui/edge3d/set",
-        title: "Edge3D.Set",
-      },
-      {
         role: "series",
         url: "https://stepinto.vision/learn-visionos/#spatial",
         title: "Spatial overview",
@@ -113,6 +108,7 @@ describe("normalizeWordPressPost", () => {
         title: "Download ZIP",
       },
     ])
+    expect(post.status).toBeNull()
     expect(post.references).toEqual([
       {
         title: "Edge3D.Set",
@@ -244,6 +240,60 @@ glassBackgroundBox(padding: 12, .all)</code></pre>
     expect(post.verbatim).toBe(false)
     expect(post.code.policy).toBe("verbatim")
     expect(post.code.blocks).toHaveLength(0)
+  })
+
+  it("captures limitation status metadata and canonical discussion links", () => {
+    const rawPost = {
+      id: 400,
+      slug: "pushwindow-volumes",
+      link: "https://stepinto.vision/example?ref=source#",
+      date: "2024-10-10T00:00:00Z",
+      modified: "2024-10-10T00:00:00Z",
+      title: { rendered: "Can we use pushWindow with volumes?" },
+      excerpt: {
+        rendered:
+          "<p>As of October 10, 2024 and visionOS 2, we cannot use pushWindow with Volumes.</p>",
+      },
+      content: {
+        rendered: `
+          <p>As of October 10, 2024 and visionOS 2, we cannot use <code>pushWindow</code> with Volumes.</p>
+          <p>See the <a href="https://forums.developer.apple.com/forums/thread/12345?login=true#654321">forum discussion</a>.</p>
+          <p>Reference <a href="https://developer.apple.com/documentation/realitykit/model3d/">Model3D</a>.</p>
+          <div class="wp-block-embed"><iframe src="https://www.youtube.com/embed/example#?secret=abc"></iframe></div>
+        `,
+      },
+    }
+
+    const post = normalizeWordPressPost(rawPost as never)
+
+    expect(post.link).toBe("https://stepinto.vision/example")
+    expect(post.videoUrl).toBe("https://www.youtube.com/embed/example")
+    expect(post.status).toEqual(
+      expect.objectContaining({
+        type: "limitation",
+        stability: "likely_to_change",
+        note: expect.stringContaining("As of October 10, 2024"),
+        appliesTo: expect.objectContaining({
+          product: "visionOS",
+          versions: ["2.x"],
+        }),
+        asOf: "2024-10-10T00:00:00.000Z",
+      }),
+    )
+
+    expect(post.links).toContainEqual(
+      expect.objectContaining({
+        role: "discussion",
+        url: "https://forums.developer.apple.com/forums/thread/12345",
+      }),
+    )
+
+    expect(post.links.find((link) => link.role === "docs")).toBeUndefined()
+    expect(post.references).toContainEqual(
+      expect.objectContaining({
+        url: "https://developer.apple.com/documentation/realitykit/model3d/",
+      }),
+    )
   })
 })
 
