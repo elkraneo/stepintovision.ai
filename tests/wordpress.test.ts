@@ -125,6 +125,8 @@ describe("normalizeWordPressPost", () => {
     expect(post.assetAuthor).toBe("komiro100")
     expect(post.assetLicense).toBe("CC0")
     expect(post.videoUrl).toBe("https://player.vimeo.com/video/example")
+    expect(post.normalized).toBe(true)
+    expect(post.verbatim).toBe(false)
   })
 
   it("falls back to numeric taxonomy IDs when embedded terms are absent", () => {
@@ -146,6 +148,8 @@ describe("normalizeWordPressPost", () => {
     expect(post.categories).toEqual(["1", "2"])
     expect(post.tags).toEqual(["3"])
     expect(post.heroImage).toBeNull()
+    expect(post.normalized).toBe(true)
+    expect(post.verbatim).toBe(false)
   })
 })
 

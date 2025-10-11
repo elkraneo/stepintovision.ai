@@ -38,6 +38,8 @@ beforeAll(async () => {
         author: "Step Into Vision",
         license: "All rights reserved",
         version: 1,
+        normalized: true,
+        verbatim: false,
         seeAlso: [],
         developerLinks: [],
         contentDigest: "sha256-test",

@@ -59,6 +59,8 @@ function buildResourceMeta(post: StepIntoVisionPost): Record<string, unknown> {
     author: post.author,
     license: post.license,
     version: post.version,
+    normalized: post.normalized,
+    verbatim: post.verbatim,
     categories: post.categories,
     tags: post.tags,
     heroImage,
@@ -92,7 +94,6 @@ function buildResourceItem(post: StepIntoVisionPost) {
       audience: ["assistant"],
       priority: 0.8,
       lastModified: toIsoString(post.updatedAt),
-      publishedAt: toIsoString(post.publishedAt),
     },
     _meta: buildResourceMeta(post),
   }
@@ -124,6 +125,8 @@ function buildMetaDocument(post: StepIntoVisionPost): StepIntoVisionPostMetaDocu
     wordCount: post.wordCount,
     tokenCount: post.tokenCount,
     readingTimeSeconds: post.readingTimeSeconds,
+    normalized: post.normalized,
+    verbatim: post.verbatim,
     heroImage,
     media,
     seeAlso: post.seeAlso,
@@ -157,6 +160,8 @@ function buildMetaResourceItem(post: StepIntoVisionPost) {
       schema: metaDocument.schema,
       contentDigest: metaDocument.contentDigest,
       suggestedFileName: buildMetaName(post),
+      normalized: metaDocument.normalized,
+      verbatim: metaDocument.verbatim,
     },
   }
 }

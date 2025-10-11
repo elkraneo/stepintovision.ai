@@ -281,6 +281,8 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     author: DEFAULT_AUTHOR,
     license: DEFAULT_LICENSE,
     version: 1,
+    normalized: true,
+    verbatim: false,
     seeAlso,
     developerLinks,
     contentDigest: `sha256-${contentDigest}`,

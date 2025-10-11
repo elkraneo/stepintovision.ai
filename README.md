@@ -103,7 +103,8 @@ Resource templates:
 - `stepintovision://post/{slug}` – AI-focused Markdown for a specific post. The
   Markdown contains only the article body and optional `## See Also` section.
   All metadata lives in the resource `_meta` object so agents do not need to
-  parse the Markdown.
+  parse the Markdown. MCP annotations are limited to the protocol hints
+  (`audience`, `priority`, `lastModified`).
 - `stepintovision://post/{slug}/meta` – JSON payload conforming to
   `mcp.post.v1` that mirrors sosumi.ai’s structured document. The Markdown
   resource references this URI via `_meta.metaUri`.
@@ -117,6 +118,9 @@ Each Markdown resource includes `_meta` fields with:
   and SHA-256 `contentDigest`.
 - Format hints: locale, `contentType`, `wordCount`, `tokenCount`,
   `readingTimeSeconds`.
+- Normalization flags: `normalized` is `true` when the article body has been
+  grammar-fixed or deduplicated; `verbatim` remains `false` for the curated
+  Markdown we serve.
 - Taxonomy & relations: categories, tags, hero image metadata, additional
   inline media, `seeAlso`, developer-focused links (e.g., GitHub repository and
   download URLs), `alternateUrls.aiReadable`, and provenance fields for

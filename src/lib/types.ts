@@ -34,6 +34,8 @@ export interface StepIntoVisionPost {
   author: string
   license: string
   version: number
+  normalized: boolean
+  verbatim: boolean
   seeAlso: StepIntoVisionSeeAlsoItem[]
   developerLinks: StepIntoVisionSeeAlsoItem[]
   contentDigest: string
@@ -67,6 +69,8 @@ export interface StepIntoVisionPostMetaDocument {
   wordCount: number
   tokenCount: number
   readingTimeSeconds: number
+  normalized: boolean
+  verbatim: boolean
   heroImage?: StepIntoVisionMedia | null
   media: StepIntoVisionMedia[]
   seeAlso: StepIntoVisionSeeAlsoItem[]
