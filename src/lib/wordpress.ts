@@ -233,6 +233,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
   const contentMarkdown = prepared.markdown
   const contentText = prepared.text
   const seeAlso = prepared.seeAlso
+  const developerLinks = prepared.developerLinks
   const wordCount = contentText.split(/\s+/).filter(Boolean).length
   const tokenCount = Math.max(1, Math.round(wordCount * 1.3))
   const readingTimeSeconds = Math.max(30, Math.round((wordCount / 200) * 60))
@@ -272,6 +273,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     license: DEFAULT_LICENSE,
     version: 1,
     seeAlso,
+    developerLinks,
     contentDigest: `sha256-${contentDigest}`,
   }
 }
@@ -371,6 +373,7 @@ interface PreparedContent {
   markdown: string
   text: string
   seeAlso: StepIntoVisionSeeAlsoItem[]
+  developerLinks: StepIntoVisionSeeAlsoItem[]
 }
 
 function prepareContent(rawHtml: string): PreparedContent {
@@ -473,8 +476,19 @@ function prepareContent(rawHtml: string): PreparedContent {
       $(element).attr("src", cleanSrc)
     }
 
-    if (alt === "") {
-      $(element).attr("alt", "")
+    const trimmedAlt = alt?.trim() ?? ""
+    if (!trimmedAlt) {
+      const figure = $(element).closest("figure")
+      if (figure.length > 0) {
+        figure.remove()
+        return
+      }
+      $(element).remove()
+      return
+    }
+
+    if (alt !== trimmedAlt) {
+      $(element).attr("alt", trimmedAlt)
     }
 
     if (width) {
@@ -509,6 +523,7 @@ function prepareContent(rawHtml: string): PreparedContent {
     markdown: normalizedMarkdown,
     text,
     seeAlso: dedupeSeeAlso(seeAlsoItems),
+    developerLinks: collectDeveloperLinks($),
   }
 }
 
@@ -576,4 +591,22 @@ function dedupeSeeAlso(items: StepIntoVisionSeeAlsoItem[]): StepIntoVisionSeeAls
     }
   }
   return result
+}
+
+function collectDeveloperLinks($: ReturnType<typeof load>): StepIntoVisionSeeAlsoItem[] {
+  const links: StepIntoVisionSeeAlsoItem[] = []
+  $("a[href]").each((_, element) => {
+    const href = $(element).attr("href")?.trim()
+    if (!href) {
+      return
+    }
+    const normalizedHref = cleanUrl(href)
+    if (!normalizedHref || !normalizedHref.includes("github.com")) {
+      return
+    }
+    const title = $(element).text().trim() || normalizedHref
+    links.push({ title, url: normalizedHref })
+  })
+
+  return dedupeSeeAlso(links)
 }

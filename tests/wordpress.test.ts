@@ -28,6 +28,8 @@ describe("normalizeWordPressPost", () => {
           <ul class="wp-block-list">
             <li><a href="https://stepinto.vision/example-1/">Example 1</a></li>
           </ul>
+          <p><a href="https://github.com/stepintovision/realitykit-sample">GitHub Repo</a></p>
+          <p><a href="https://github.com/stepintovision/realitykit-sample/archive/refs/heads/main.zip">Download ZIP</a></p>
           <figure class="wp-block-image"><img src="https://stepinto.vision/wp-content/uploads/example.jpg?resize=100" alt="Diagram" width="800" height="600" data-id="1" /></figure>
           <script>console.log('ignored')</script>
         `,
@@ -71,6 +73,16 @@ describe("normalizeWordPressPost", () => {
     expect(post.contentText).toContain("Main content")
     expect(post.seeAlso).toEqual([
       { title: "Example 1", url: "https://stepinto.vision/example-1/" },
+    ])
+    expect(post.developerLinks).toEqual([
+      {
+        title: "GitHub Repo",
+        url: "https://github.com/stepintovision/realitykit-sample",
+      },
+      {
+        title: "Download ZIP",
+        url: "https://github.com/stepintovision/realitykit-sample/archive/refs/heads/main.zip",
+      },
     ])
     expect(post.locale).toBe("en")
     expect(post.license).toBe("All rights reserved")

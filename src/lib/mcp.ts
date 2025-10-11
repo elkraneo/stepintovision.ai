@@ -63,6 +63,7 @@ function buildResourceMeta(post: StepIntoVisionPost): Record<string, unknown> {
     heroImage,
     media,
     seeAlso: post.seeAlso,
+    developerLinks: post.developerLinks,
     wordCount: post.wordCount,
     tokenCount: post.tokenCount,
     readingTimeSeconds: post.readingTimeSeconds,
@@ -118,6 +119,7 @@ function buildMetaDocument(post: StepIntoVisionPost): StepIntoVisionPostMetaDocu
     heroImage,
     media,
     seeAlso: post.seeAlso,
+    developerLinks: post.developerLinks,
     contentDigest: post.contentDigest,
   }
 }

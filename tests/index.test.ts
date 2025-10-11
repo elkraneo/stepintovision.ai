@@ -39,6 +39,7 @@ beforeAll(async () => {
         license: "All rights reserved",
         version: 1,
         seeAlso: [],
+        developerLinks: [],
         contentDigest: "sha256-test",
       },
     ],

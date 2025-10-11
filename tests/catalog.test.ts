@@ -27,6 +27,7 @@ const samplePosts: StepIntoVisionPost[] = [
     license: "All rights reserved",
     version: 1,
     seeAlso: [],
+    developerLinks: [],
     contentDigest: "sha256-hello",
   },
   {
@@ -51,6 +52,7 @@ const samplePosts: StepIntoVisionPost[] = [
     license: "All rights reserved",
     version: 1,
     seeAlso: [],
+    developerLinks: [],
     contentDigest: "sha256-dive",
   },
 ]
@@ -78,5 +80,17 @@ describe("catalog helpers", () => {
     expect(markdown.startsWith("# Hello World")).toBe(true)
     expect(markdown).toContain("Hello Vision")
     expect(markdown).not.toContain("schema: mcp.post.v1")
+  })
+
+  it("omits duplicated excerpts from the Markdown body", () => {
+    const post: StepIntoVisionPost = {
+      ...samplePosts[0],
+      excerpt: "An introduction to Step Into Vision",
+      contentMarkdown: "An introduction to Step Into Vision\n\nMore body content.",
+    }
+
+    const markdown = renderPostMarkdown(post)
+    expect(markdown).not.toMatch(/An introduction to Step Into Vision\n\nAn introduction/)
+    expect(markdown).toContain("More body content.")
   })
 })

@@ -117,8 +117,9 @@ Each Markdown resource includes `_meta` fields with:
   and SHA-256 `contentDigest`.
 - Format hints: locale, `contentType`, `wordCount`, `tokenCount`,
   `readingTimeSeconds`.
-- Taxonomy & relations: categories, tags, hero image metadata, `seeAlso`, and
-  an `alternateUrls.aiReadable` pointer for the public domain swap.
+- Taxonomy & relations: categories, tags, hero image metadata, `seeAlso`,
+  developer-focused links (e.g., GitHub download and repository URLs), and an
+  `alternateUrls.aiReadable` pointer for the public domain swap.
 
 The JSON metadata companion exposes the same information plus the `schema`
 version in a machine-friendly document. The Markdown body continues to be

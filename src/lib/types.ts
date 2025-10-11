@@ -33,6 +33,7 @@ export interface StepIntoVisionPost {
   license: string
   version: number
   seeAlso: StepIntoVisionSeeAlsoItem[]
+  developerLinks: StepIntoVisionSeeAlsoItem[]
   contentDigest: string
 }
 
@@ -60,6 +61,7 @@ export interface StepIntoVisionPostMetaDocument {
   heroImage?: StepIntoVisionMedia | null
   media: StepIntoVisionMedia[]
   seeAlso: StepIntoVisionSeeAlsoItem[]
+  developerLinks: StepIntoVisionSeeAlsoItem[]
   contentDigest: string
 }
 
