@@ -37,12 +37,22 @@ interface BuildOptions {
   rendered?: RenderedPostMarkdown
 }
 
+function ensureContentDigest(post: StepIntoVisionPost, rendered: RenderedPostMarkdown) {
+  const expected = post.contentDigest?.trim()
+  if (expected && expected !== rendered.contentDigest) {
+    throw new Error(
+      `Content digest mismatch for ${post.slug}: expected ${expected} but computed ${rendered.contentDigest}`,
+    )
+  }
+}
+
 export function buildResourceMeta(
   post: StepIntoVisionPost,
   options: BuildOptions = {},
 ): Record<string, unknown> {
   const markdownUri = buildResourceUri(post)
   const computed = options.rendered ?? buildRenderedPostMarkdown(post)
+  ensureContentDigest(post, computed)
   return {
     schema: "mcp.post.v1",
     canonicalUrl: post.link,
@@ -85,6 +95,7 @@ export function buildMetaDocument(
 ): StepIntoVisionPostMetaDocument {
   const markdownUri = buildResourceUri(post)
   const computed = options.rendered ?? buildRenderedPostMarkdown(post)
+  ensureContentDigest(post, computed)
   const meta: StepIntoVisionPostMetaDocument = {
     schema: "mcp.post.v1",
     id: String(post.id),

@@ -105,6 +105,14 @@ describe("MCP resource metadata", () => {
     expect(metaDocument.normalizedScope).toBe("prose")
   })
 
+  it("throws when stored digests do not match canonical output", () => {
+    const post = normalizeWordPressPost(createSampleWordPressPost() as never)
+    post.contentDigest = "sha256-deadbeef"
+
+    expect(() => buildResourceItem(post)).toThrow(/Content digest mismatch/)
+    expect(() => buildMetaDocument(post)).toThrow(/Content digest mismatch/)
+  })
+
   it("surfaces code metadata on list resources without fetching JSON sidecars", async () => {
     const first = normalizeWordPressPost(createSampleWordPressPost() as never)
     const secondRaw = createSampleWordPressPost()

@@ -7,10 +7,32 @@ import type {
 
 export function canonicalizeMarkdown(value: string): string {
   const normalizedLineEndings = value.replace(/\r\n/g, "\n")
-  const trimmedLines = normalizedLineEndings
-    .split("\n")
-    .map((line) => line.replace(/\s+$/u, ""))
-  let canonical = trimmedLines.join("\n").trim()
+  const lines = normalizedLineEndings.split("\n")
+
+  const result: string[] = []
+  let insideCode = false
+
+  for (const line of lines) {
+    const isFence = line.startsWith("```")
+    if (!insideCode) {
+      result.push(line.replace(/\s+$/u, ""))
+    } else {
+      result.push(line)
+    }
+    if (isFence) {
+      insideCode = !insideCode
+    }
+  }
+
+  // Remove leading and trailing empty lines outside of code fences.
+  while (result.length > 0 && result[0].trim() === "") {
+    result.shift()
+  }
+  while (result.length > 0 && result[result.length - 1].trim() === "") {
+    result.pop()
+  }
+
+  let canonical = result.join("\n")
   if (!canonical.endsWith("\n")) {
     canonical += "\n"
   }
