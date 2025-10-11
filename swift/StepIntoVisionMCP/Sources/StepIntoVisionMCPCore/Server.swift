@@ -97,6 +97,7 @@ public struct PostRecord: Codable, Sendable {
     let featuredMediaAltText: String?
     let categories: [TermRecord]
     let tags: [TermRecord]
+    let fetchedAt: Date?
 
     var allTerms: [TermRecord] { categories + tags }
 
@@ -119,7 +120,8 @@ public struct PostRecord: Codable, Sendable {
         featuredMediaURL: String?,
         featuredMediaAltText: String?,
         categories: [TermRecord],
-        tags: [TermRecord]
+        tags: [TermRecord],
+        fetchedAt: Date? = nil
     ) {
         self.id = id
         self.slug = slug
@@ -140,6 +142,7 @@ public struct PostRecord: Codable, Sendable {
         self.featuredMediaAltText = featuredMediaAltText
         self.categories = categories
         self.tags = tags
+        self.fetchedAt = fetchedAt
     }
 
     func summary() -> PostSummary {
@@ -157,6 +160,8 @@ public struct PostRecord: Codable, Sendable {
             excerpt: excerptText,
             link: link,
             publishedAt: publishedAt,
+            modifiedAt: modifiedAt,
+            fetchedAt: fetchedAt,
             categories: categories,
             tags: tags,
             authorName: authorName
@@ -167,6 +172,9 @@ public struct PostRecord: Codable, Sendable {
         var payload = summary().toJSON()
         payload["guid"] = guid
         payload["modified_at"] = iso8601String(from: modifiedAt)
+        if let fetchedAt {
+            payload["fetched_at"] = iso8601String(from: fetchedAt)
+        }
         if let authorSlug { payload["author_slug"] = authorSlug }
         if let authorID { payload["author_id"] = authorID }
         if let authorURL { payload["author_url"] = authorURL }
@@ -189,6 +197,8 @@ public struct PostSummary: Sendable {
     let excerpt: String
     let link: String
     let publishedAt: Date
+    let modifiedAt: Date
+    let fetchedAt: Date?
     let categories: [TermRecord]
     let tags: [TermRecord]
     let authorName: String?
@@ -200,6 +210,8 @@ public struct PostSummary: Sendable {
         excerpt: String,
         link: String,
         publishedAt: Date,
+        modifiedAt: Date,
+        fetchedAt: Date?,
         categories: [TermRecord],
         tags: [TermRecord],
         authorName: String?
@@ -210,6 +222,8 @@ public struct PostSummary: Sendable {
         self.excerpt = excerpt
         self.link = link
         self.publishedAt = publishedAt
+        self.modifiedAt = modifiedAt
+        self.fetchedAt = fetchedAt
         self.categories = categories
         self.tags = tags
         self.authorName = authorName
@@ -223,9 +237,11 @@ public struct PostSummary: Sendable {
             "excerpt": excerpt,
             "url": link,
             "published_at": iso8601String(from: publishedAt),
+            "modified_at": iso8601String(from: modifiedAt),
             "categories": categories.map { $0.toJSON() },
             "tags": tags.map { $0.toJSON() }
         ]
+        if let fetchedAt { payload["fetched_at"] = iso8601String(from: fetchedAt) }
         if let authorName { payload["author"] = authorName }
         return payload
     }
@@ -564,6 +580,14 @@ public final class ContentDatabase: @unchecked Sendable {
             throw ContentDatabaseError.sqliteError("Invalid date encoding in database")
         }
 
+        let fetchedDate: Date?
+        if let fetchedString: String = row["fetched_at"],
+           let parsed = parseISO8601Date(fetchedString) {
+            fetchedDate = parsed
+        } else {
+            fetchedDate = nil
+        }
+
         return PostRecord(
             id: row["id"],
             slug: row["slug"],
@@ -583,7 +607,8 @@ public final class ContentDatabase: @unchecked Sendable {
             featuredMediaURL: row["featured_media_url"],
             featuredMediaAltText: row["featured_media_alt_text"],
             categories: termBuckets.categories,
-            tags: termBuckets.tags
+            tags: termBuckets.tags,
+            fetchedAt: fetchedDate
         )
     }
 
@@ -639,11 +664,16 @@ private struct TermBuckets {
 
 // MARK: - MCP Server
 
+struct ToolDisplayPayload {
+    let payload: [String: Any]
+    let displayText: String
+}
+
 struct StepIntoVisionToolResponses {
     let database: ContentDatabase
     let logger: Logger
 
-    func listPosts(arguments: ListPostsArguments) throws -> [String: Any] {
+    func listPosts(arguments: ListPostsArguments) throws -> ToolDisplayPayload {
         let limit = arguments.limit ?? 10
         let offset = arguments.offset ?? 0
         if limit < 1 || limit > 50 {
@@ -654,13 +684,14 @@ struct StepIntoVisionToolResponses {
         }
         let posts = try database
             .listPosts(limit: limit, offset: offset, categorySlug: arguments.categorySlug, tagSlug: arguments.tagSlug)
-        let items = posts.map { $0.summary().toJSON() }
+        let summaries = posts.map { $0.summary() }
+        let items = summaries.map { $0.toJSON() }
         let filters: [String: Any] = [
             "category_slug": arguments.categorySlug ?? NSNull(),
             "tag_slug": arguments.tagSlug ?? NSNull()
         ]
 
-        return [
+        let payload: [String: Any] = [
             "count": items.count,
             "items": items,
             "paging": [
@@ -670,9 +701,47 @@ struct StepIntoVisionToolResponses {
             ],
             "filters": filters
         ]
+
+        let displayText = formatListPostsDisplay(
+            summaries: summaries,
+            limit: limit,
+            offset: offset,
+            categorySlug: arguments.categorySlug,
+            tagSlug: arguments.tagSlug
+        )
+
+        return ToolDisplayPayload(payload: payload, displayText: displayText)
     }
 
-    func getPost(arguments: GetPostArguments) throws -> [String: Any] {
+    private func formatListPostsDisplay(
+        summaries: [PostSummary],
+        limit: Int,
+        offset: Int,
+        categorySlug: String?,
+        tagSlug: String?
+    ) -> String {
+        var lines: [String] = []
+        var header = "Showing \(summaries.count) post(s)"
+        var filters: [String] = []
+        if let categorySlug { filters.append("category \"\(categorySlug)\"") }
+        if let tagSlug { filters.append("tag \"\(tagSlug)\"") }
+        if !filters.isEmpty {
+            header += " filtered by " + filters.joined(separator: " and ")
+        }
+        header += " (limit \(limit), offset \(offset))."
+        lines.append(header)
+
+        if summaries.isEmpty {
+            lines.append("No posts matched the request.")
+            return lines.joined(separator: "\n")
+        }
+
+        lines.append("")
+        lines.append(contentsOf: formattedSummaries(summaries))
+        return lines.joined(separator: "\n")
+    }
+
+    func getPost(arguments: GetPostArguments) throws -> ToolDisplayPayload {
         if arguments.slug == nil && arguments.postID == nil {
             throw ToolArgumentError("Either slug or post_id must be provided")
         }
@@ -681,10 +750,57 @@ struct StepIntoVisionToolResponses {
         }
         let includeHTML = arguments.includeHTML ?? false
         let includeText = arguments.includeText ?? true
-        return post.toJSON(includeHTML: includeHTML, includeText: includeText)
+        let payload = post.toJSON(includeHTML: includeHTML, includeText: includeText)
+        let displayText = formatPostDetail(
+            summary: post.summary(),
+            includeHTML: includeHTML,
+            includeText: includeText
+        )
+        return ToolDisplayPayload(payload: payload, displayText: displayText)
     }
 
-    func searchPosts(arguments: SearchPostsArguments) throws -> [String: Any] {
+    private func formatPostDetail(
+        summary: PostSummary,
+        includeHTML: Bool,
+        includeText: Bool
+    ) -> String {
+        var lines: [String] = []
+        lines.append("Post: \(summary.title)")
+        lines.append("URL: \(summary.link)")
+
+        var meta: [String] = ["Published: \(displayDateString(for: summary.publishedAt))"]
+        if summary.modifiedAt != summary.publishedAt {
+            meta.append("Updated: \(displayDateString(for: summary.modifiedAt))")
+        }
+        if let fetched = summary.fetchedAt {
+            meta.append("Fetched: \(displayTimestampString(for: fetched))")
+        }
+        if let author = summary.authorName, !author.isEmpty {
+            meta.append("Author: \(author)")
+        }
+        lines.append(meta.joined(separator: " • "))
+
+        if !summary.categories.isEmpty {
+            lines.append("Categories: \(formatTerms(summary.categories))")
+        }
+        if !summary.tags.isEmpty {
+            lines.append("Tags: \(formatTerms(summary.tags))")
+        }
+
+        if let snippet = excerptSnippet(from: summary) {
+            lines.append("")
+            lines.append(snippet)
+        }
+
+        if let inclusion = describeContentInclusions(includeHTML: includeHTML, includeText: includeText) {
+            lines.append("")
+            lines.append(inclusion)
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    func searchPosts(arguments: SearchPostsArguments) throws -> ToolDisplayPayload {
         guard let query = arguments.query?.trimmingCharacters(in: .whitespacesAndNewlines), query.count >= 2 else {
             throw ToolArgumentError("query must be at least 2 characters")
         }
@@ -697,10 +813,11 @@ struct StepIntoVisionToolResponses {
             throw ToolArgumentError("offset cannot be negative")
         }
         let posts = try database.searchPosts(query: query, limit: limit, offset: offset)
+        let summaries = posts.map { $0.summary() }
         let includeHTML = arguments.includeHTML ?? false
         let includeText = includeHTML ? false : true
         let items = posts.map { $0.toJSON(includeHTML: includeHTML, includeText: includeText) }
-        return [
+        let payload: [String: Any] = [
             "query": query,
             "count": items.count,
             "items": items,
@@ -710,6 +827,124 @@ struct StepIntoVisionToolResponses {
                 "next_offset": offset + items.count
             ]
         ]
+
+        let displayText = formatSearchPostsDisplay(
+            query: query,
+            summaries: summaries,
+            limit: limit,
+            offset: offset,
+            includeHTML: includeHTML,
+            includeText: includeText
+        )
+
+        return ToolDisplayPayload(payload: payload, displayText: displayText)
+    }
+
+    private func formatSearchPostsDisplay(
+        query: String,
+        summaries: [PostSummary],
+        limit: Int,
+        offset: Int,
+        includeHTML: Bool,
+        includeText: Bool
+    ) -> String {
+        var lines: [String] = []
+        lines.append("Search results for \"\(query)\": \(summaries.count) post(s) (limit \(limit), offset \(offset)).")
+        if let inclusion = describeContentInclusions(includeHTML: includeHTML, includeText: includeText) {
+            lines.append(inclusion)
+        }
+
+        if summaries.isEmpty {
+            lines.append("No posts matched the query.")
+            return lines.joined(separator: "\n")
+        }
+
+        lines.append("")
+        lines.append(contentsOf: formattedSummaries(summaries))
+        return lines.joined(separator: "\n")
+    }
+
+    private func formattedSummaries(_ summaries: [PostSummary]) -> [String] {
+        var lines: [String] = []
+        for (index, summary) in summaries.enumerated() {
+            lines.append("\(index + 1). \(summary.title)")
+
+            var metadata: [String] = ["Published: \(displayDateString(for: summary.publishedAt))"]
+            if summary.modifiedAt != summary.publishedAt {
+                metadata.append("Updated: \(displayDateString(for: summary.modifiedAt))")
+            }
+            if let fetched = summary.fetchedAt {
+                metadata.append("Fetched: \(displayTimestampString(for: fetched))")
+            }
+            if let author = summary.authorName, !author.isEmpty {
+                metadata.append("Author: \(author)")
+            }
+            if !summary.categories.isEmpty {
+                metadata.append("Categories: \(formatTerms(summary.categories))")
+            }
+            if !summary.tags.isEmpty {
+                metadata.append("Tags: \(formatTerms(summary.tags))")
+            }
+            if !metadata.isEmpty {
+                lines.append("   " + metadata.joined(separator: " • "))
+            }
+
+            if let snippet = excerptSnippet(from: summary) {
+                lines.append("   \(snippet)")
+            }
+
+            lines.append("   \(summary.link)")
+
+            if index < summaries.count - 1 {
+                lines.append("")
+            }
+        }
+        return lines
+    }
+
+    private func describeContentInclusions(includeHTML: Bool, includeText: Bool) -> String? {
+        var parts: [String] = []
+        if includeHTML {
+            parts.append("HTML markup")
+        }
+        if includeText {
+            parts.append("plain-text content")
+        }
+        guard !parts.isEmpty else { return nil }
+        let joined = parts.joined(separator: " and ")
+        return "JSON response includes \(joined)."
+    }
+
+    private func excerptSnippet(from summary: PostSummary) -> String? {
+        let raw = normalizeWhitespace(htmlToText(summary.excerpt))
+        guard !raw.isEmpty else { return nil }
+        return truncated(raw, maxLength: 240)
+    }
+
+    private func formatTerms(_ terms: [TermRecord]) -> String {
+        terms.map(\.name).joined(separator: ", ")
+    }
+
+    private func displayDateString(for date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        return formatter.string(from: date)
+    }
+
+    private func displayTimestampString(for date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+
+    private func truncated(_ text: String, maxLength: Int) -> String {
+        guard text.count > maxLength else { return text }
+        let index = text.index(text.startIndex, offsetBy: maxLength)
+        var truncated = String(text[..<index])
+        if let lastSpace = truncated.lastIndex(of: " ") {
+            truncated = String(truncated[..<lastSpace])
+        }
+        return truncated + "…"
     }
 }
 
@@ -857,11 +1092,11 @@ public final class StepIntoVisionMCPServer: @unchecked Sendable {
         return try decoder.decode(T.self, from: data)
     }
 
-    private static func makeJSONResult(from payload: [String: Any]) throws -> MCP.CallTool.Result {
-        let (data, text) = try encodePayload(payload)
+    private static func makeJSONResult(from payload: ToolDisplayPayload) throws -> MCP.CallTool.Result {
+        let (data, text) = try encodePayload(payload.payload)
         let dataURI = "data:application/json;base64,\(data.base64EncodedString())"
         let content: [MCP.Tool.Content] = [
-            .text(text),
+            .text(payload.displayText),
             .resource(uri: dataURI, mimeType: "application/json", text: text)
         ]
         return MCP.CallTool.Result(content: content)
