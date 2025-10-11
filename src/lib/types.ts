@@ -43,6 +43,8 @@ export interface StepIntoVisionCodeMetadata {
   blocks: StepIntoVisionCodeBlock[]
 }
 
+export type StepIntoVisionNormalizationScope = "prose" | "verbatim" | "sidecar" | "unknown"
+
 export interface StepIntoVisionPost {
   id: number
   slug: string
@@ -66,6 +68,7 @@ export interface StepIntoVisionPost {
   version: number
   normalized: boolean
   verbatim: boolean
+  normalizedScope?: StepIntoVisionNormalizationScope
   seeAlso: StepIntoVisionSeeAlsoItem[]
   references: StepIntoVisionSeeAlsoItem[]
   links: StepIntoVisionLink[]
@@ -106,6 +109,7 @@ export interface StepIntoVisionPostMetaDocument {
   readingTimeSeconds: number
   normalized: boolean
   verbatim: boolean
+  normalizedScope?: StepIntoVisionNormalizationScope
   code: StepIntoVisionCodeMetadata
   media: StepIntoVisionMedia[]
   seeAlso: StepIntoVisionSeeAlsoItem[]

@@ -55,6 +55,7 @@ export function buildResourceMeta(
     summary: post.excerpt,
     normalized: post.normalized,
     verbatim: post.verbatim,
+    ...(post.normalizedScope ? { normalizedScope: post.normalizedScope } : {}),
     version: post.version,
     contentDigest: computed.contentDigest,
     code: computed.code,
@@ -106,6 +107,7 @@ export function buildMetaDocument(
     readingTimeSeconds: post.readingTimeSeconds,
     normalized: post.normalized,
     verbatim: post.verbatim,
+    ...(post.normalizedScope ? { normalizedScope: post.normalizedScope } : {}),
     code: computed.code,
     media: post.media.map((item) => ({
       role: item.role,

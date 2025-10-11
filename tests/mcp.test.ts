@@ -70,6 +70,7 @@ describe("MCP resource metadata", () => {
       code: {
         policy: "verbatim",
       },
+      normalizedScope: "prose",
     })
     const codeMeta = (meta.code ?? {}) as { blocks?: unknown[] }
     expect(Array.isArray(codeMeta.blocks)).toBe(true)
@@ -101,6 +102,7 @@ describe("MCP resource metadata", () => {
     expect(resourceMeta.code?.blocks?.length).toBeGreaterThan(0)
     expect(metaDocument.code.blocks.length).toBeGreaterThan(0)
     expect(metaDocument.contentDigest).toMatch(/^sha256-/)
+    expect(metaDocument.normalizedScope).toBe("prose")
   })
 
   it("surfaces code metadata on list resources without fetching JSON sidecars", async () => {
@@ -136,6 +138,59 @@ describe("MCP resource metadata", () => {
       expect(meta.code?.blocks).toBeDefined()
       expect(meta.code?.blocks?.length ?? 0).toBeGreaterThan(0)
     }
+  })
+
+  it("exposes markdown _meta with code blocks via resource templates", async () => {
+    const post = normalizeWordPressPost(createSampleWordPressPost() as never)
+    const server = createMcpServer(async () => [post])
+
+    const templates = (server as unknown as {
+      _registeredResourceTemplates: Record<
+        string,
+        {
+          resourceTemplate: { listCallback?: (extra: unknown) => Promise<unknown> }
+          readCallback: (uri: URL, params: Record<string, unknown>) => Promise<unknown>
+        }
+      >
+    })._registeredResourceTemplates
+
+    const markdownTemplate = templates.stepIntoVisionPost
+    expect(markdownTemplate).toBeDefined()
+
+    expect(markdownTemplate.resourceTemplate.listCallback).toBeTypeOf("function")
+
+    const listResult = (await markdownTemplate.resourceTemplate.listCallback!({})) as {
+      resources: Array<Record<string, unknown>>
+    }
+    expect(Array.isArray(listResult.resources)).toBe(true)
+    const [resource] = listResult.resources
+    expect(resource).toBeDefined()
+    expect(resource.uri).toBe(`stepintovision://post/${post.slug}`)
+    expect(resource.annotations).toMatchObject({
+      lastModified: new Date(post.updatedAt).toISOString(),
+    })
+    const meta = resource._meta as Record<string, unknown>
+    expect(meta).toMatchObject({
+      canonicalUrl: post.link,
+      metaUri: `stepintovision://post/${post.slug}/meta`,
+      contentDigest: post.contentDigest,
+      code: { policy: "verbatim" },
+    })
+    const codeBlocks = ((meta.code as { blocks?: unknown[] })?.blocks ?? []) as unknown[]
+    expect(codeBlocks.length).toBeGreaterThan(0)
+
+    const readResult = (await markdownTemplate.readCallback(new URL(resource.uri as string), {
+      slug: post.slug,
+    })) as { contents: Array<Record<string, unknown>> }
+
+    expect(readResult.contents).toHaveLength(1)
+    const [content] = readResult.contents
+    expect(content._meta).toMatchObject({
+      canonicalUrl: post.link,
+      metaUri: `stepintovision://post/${post.slug}/meta`,
+      code: { policy: "verbatim" },
+      contentDigest: post.contentDigest,
+    })
   })
 })
 

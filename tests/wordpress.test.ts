@@ -157,6 +157,7 @@ describe("normalizeWordPressPost", () => {
     expect(post.videoUrl).toBe("https://player.vimeo.com/video/example")
     expect(post.normalized).toBe(true)
     expect(post.verbatim).toBe(false)
+    expect(post.normalizedScope).toBe("prose")
     expect(post.contentMarkdown).not.toContain("xtension")
     expect(post.code.policy).toBe("verbatim")
     expect(post.code.blocks.length).toBeGreaterThan(0)

@@ -317,6 +317,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     version: 1,
     normalized: true,
     verbatim: false,
+    normalizedScope: "prose",
     seeAlso,
     references,
     links,
