@@ -55,10 +55,11 @@ describe("catalog helpers", () => {
 
   it("renders markdown with metadata", () => {
     const markdown = renderPostMarkdown(samplePosts[0])
-    expect(markdown).toMatch(/---\nid: 1\nslug: "hello-world"/)
-    expect(markdown).toContain("readingTimeMinutes:")
-    expect(markdown).toContain("# Hello World")
-    expect(markdown).toContain("Source: https://stepinto.vision/hello-world")
-    expect(markdown).toContain("```html")
+    expect(markdown).toMatch(/---\ntitle: "Hello World"\n/)
+    expect(markdown).toContain('mcpResource: "stepintovision://post/hello-world"')
+    expect(markdown).toContain('aiReadableUrl: "https://stepintovision.ai/hello-world"')
+    expect(markdown).toContain("## At a Glance")
+    expect(markdown).toContain("- **Source:** https://stepinto.vision/hello-world")
+    expect(markdown).toContain("## Original HTML")
   })
 })

@@ -66,6 +66,13 @@ returns service metadata and available routes.
 - `POST /mcp` (Streamable HTTP) – Model Context Protocol endpoint powering the
   Step Into Vision tools. When deploying remotely be sure to append `/mcp` to
   the service URL.
+- AI-readable shortcuts – swap the production domain for
+  [`https://stepintovision.ai`](https://stepintovision.ai) or hit the local
+  worker with `http://localhost:8787/mcp/<slug>`. For example, replacing the
+  original post URL
+  `https://stepinto.vision/example-code/realitykit-basics-coordinate-space-conversion/`
+  with `https://stepintovision.ai/example-code/realitykit-basics-coordinate-space-conversion/`
+  returns the Markdown payload directly, mirroring sosumi.ai’s behavior.
 
 ### MCP Integration
 
@@ -92,7 +99,10 @@ Available MCP tools:
 And a resource template:
 
 - `stepintovision://post/{slug}` – Provides Markdown for a specific post with
-  detailed YAML metadata and the original HTML payload.
+  detailed YAML metadata and the original HTML payload. The front matter is
+  modeled after sosumi.ai with title, description, canonical source URL,
+  timestamps, word and reading-time counts, taxonomy, and MCP resource hints to
+  make the content maximally useful in downstream tools.
 
 ### Testing & Quality
 

@@ -142,6 +142,27 @@ app.get("/search", async (c) => {
   })
 })
 
+app.get("/*", async (c) => {
+  const path = c.req.path
+  const segments = path.split("/").filter(Boolean)
+  if (segments.length === 0) {
+    throw new HTTPException(404, { message: "Post not found" })
+  }
+
+  const slug = segments[segments.length - 1]
+  const posts = await loadPosts()
+  const post = getPostBySlug(posts, slug)
+  if (!post) {
+    throw new HTTPException(404, { message: "Post not found" })
+  }
+
+  return c.text(renderPostMarkdown(post), 200, {
+    "Content-Type": "text/markdown; charset=utf-8",
+    "Content-Location": post.link,
+    Link: `<${post.link}>; rel="canonical"`,
+  })
+})
+
 app.all("/mcp", async (c) => {
   const transport = new StreamableHTTPTransport()
   await mcpServer.connect(transport)
