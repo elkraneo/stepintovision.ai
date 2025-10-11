@@ -96,16 +96,22 @@ describe("normalizeWordPressPost", () => {
         role: "series",
         url: "https://stepinto.vision/learn-visionos/#spatial",
         title: "Spatial overview",
+        sourceType: "firstParty",
+        rel: "canonical",
       },
       {
         role: "repo",
         url: "https://github.com/stepintovision/realitykit-sample",
         title: "GitHub Repo",
+        sourceType: "thirdParty",
+        rel: "supporting",
       },
       {
         role: "download",
         url: "https://github.com/stepintovision/realitykit-sample/archive/refs/heads/main.zip",
         title: "Download ZIP",
+        sourceType: "thirdParty",
+        rel: "supporting",
       },
     ])
     expect(post.status).toBeNull()
@@ -114,6 +120,8 @@ describe("normalizeWordPressPost", () => {
         title: "Edge3D.Set",
         url: "https://developer.apple.com/documentation/swiftui/edge3d/set",
         role: "docs",
+        sourceType: "thirdParty",
+        rel: "supporting",
       },
     ])
     expect(post.locale).toBe("en")
@@ -158,13 +166,10 @@ describe("normalizeWordPressPost", () => {
     expect(post.contentMarkdown).not.toContain("xtension")
     expect(post.code.policy).toBe("verbatim")
     expect(post.code.blocks.length).toBeGreaterThan(0)
-    expect(post.code.blocks[0]).toEqual(
-      expect.objectContaining({
-        id: "code-1",
-        lang: "swift",
-        digest: expect.stringMatching(/^sha256-/),
-      }),
-    )
+    expect(post.code.blocks[0]).toMatchObject({
+      lang: "swift",
+      digest: expect.stringMatching(/^sha256-/),
+    })
 
     const rendered = renderPostMarkdown(post)
     const lines = rendered.split("\n")
@@ -207,13 +212,13 @@ glassBackgroundBox(padding: 12, .all)</code></pre>
     expect(post.contentMarkdown).toContain("glassBackgroundBox(padding: 12, .all)")
     expect(post.code.policy).toBe("verbatim")
     expect(post.code.blocks).toEqual([
-      {
-        id: "code-1",
+      expect.objectContaining({
+        id: expect.stringMatching(/^swift-[a-f0-9]{8}$/),
         lang: "swift",
         startLine: expect.any(Number),
         endLine: expect.any(Number),
         digest: expect.stringMatching(/^sha256-/),
-      },
+      }),
     ])
   })
 
@@ -295,6 +300,8 @@ glassBackgroundBox(padding: 12, .all)</code></pre>
       expect.objectContaining({
         url: "https://forums.developer.apple.com/forums/thread/12345",
         role: "discussion",
+        sourceType: "thirdParty",
+        rel: "supporting",
       }),
     )
   })
@@ -321,6 +328,8 @@ glassBackgroundBox(padding: 12, .all)</code></pre>
       title: "Volume Window Zoom",
       url: "https://www.lunarskydiving.com/blog/volume-window-zoom/",
       role: "article",
+      sourceType: "thirdParty",
+      rel: "supporting",
     })
     expect(post.links.find((link) => link.url.includes("lunarskydiving.com"))).toBeUndefined()
   })

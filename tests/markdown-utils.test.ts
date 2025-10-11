@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  analyzeMarkdown,
   canonicalizeMarkdown,
   ensureCodeFenceLanguages,
-  extractCodeMetadata,
 } from "../src/lib/markdown-utils"
 
 describe("canonicalizeMarkdown", () => {
@@ -30,7 +30,7 @@ describe("canonicalizeMarkdown", () => {
   it("produces consistent code digests after canonicalization", () => {
     const markdown = "```swift\nlet number = 1\n```\n"
     const canonical = canonicalizeMarkdown(markdown)
-    const code = extractCodeMetadata(canonical)
+    const code = analyzeMarkdown(canonical).code
 
     expect(code.blocks).toHaveLength(1)
     expect(code.blocks[0]?.digest).toMatch(/^sha256-/)
@@ -46,7 +46,7 @@ describe("canonicalizeMarkdown", () => {
 
     const canonical = canonicalizeMarkdown(markdown)
     const retagged = ensureCodeFenceLanguages(canonical)
-    const code = extractCodeMetadata(retagged)
+    const code = analyzeMarkdown(retagged).code
 
     expect(retagged.startsWith("```swift\n")).toBe(true)
     expect(code.blocks).toEqual([

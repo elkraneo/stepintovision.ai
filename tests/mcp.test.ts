@@ -74,7 +74,7 @@ describe("MCP resource metadata", () => {
     })
     expect(Array.isArray(meta.keywords)).toBe(true)
     expect(meta.keywords).toEqual(
-      expect.arrayContaining(["RealityKit", "Spatial", "Model3D", "swiftui"]),
+      expect.arrayContaining(["realitykit", "spatial", "model3d", "swiftui"]),
     )
     const codeMeta = (meta.code ?? {}) as { blocks?: unknown[] }
     expect(Array.isArray(codeMeta.blocks)).toBe(true)
@@ -108,7 +108,7 @@ describe("MCP resource metadata", () => {
     expect(metaDocument.contentDigest).toMatch(/^sha256-/)
     expect(metaDocument.normalizedScope).toBe("prose")
     expect(metaDocument.keywords).toEqual(
-      expect.arrayContaining(["RealityKit", "Spatial", "Model3D", "swiftui"]),
+      expect.arrayContaining(["realitykit", "spatial", "model3d", "swiftui"]),
     )
   })
 

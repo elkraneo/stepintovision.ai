@@ -1,5 +1,9 @@
 export type StepIntoVisionMediaRole = "hero" | "illustration" | "video"
 
+export type StepIntoVisionSourceType = "firstParty" | "thirdParty"
+
+export type StepIntoVisionLinkRel = "canonical" | "supporting"
+
 export interface StepIntoVisionMedia {
   role: StepIntoVisionMediaRole
   url: string
@@ -14,6 +18,8 @@ export interface StepIntoVisionSeeAlsoItem {
   title: string
   url: string
   role?: StepIntoVisionReferenceRole
+  sourceType?: StepIntoVisionSourceType
+  rel?: StepIntoVisionLinkRel
 }
 
 export type StepIntoVisionLinkRole =
@@ -53,6 +59,8 @@ export interface StepIntoVisionLink {
   role: StepIntoVisionLinkRole
   url: string
   title?: string
+  sourceType?: StepIntoVisionSourceType
+  rel?: StepIntoVisionLinkRel
 }
 
 export type StepIntoVisionCodePolicy = "verbatim" | "verbatim+normalized-sidecar"
@@ -71,7 +79,19 @@ export interface StepIntoVisionCodeMetadata {
   blocks: StepIntoVisionCodeBlock[]
 }
 
-export type StepIntoVisionNormalizationScope = "prose" | "verbatim" | "sidecar" | "unknown"
+export type StepIntoVisionNormalizationScope = "prose" | "none"
+
+export type StepIntoVisionLicenseType =
+  | "AllRightsReserved"
+  | "CC-BY-4.0"
+  | "CC0"
+  | "MIT"
+  | "Apache-2.0"
+
+export interface StepIntoVisionLicense {
+  type: StepIntoVisionLicenseType
+  url?: string
+}
 
 export interface StepIntoVisionPost {
   id: number
@@ -92,7 +112,7 @@ export interface StepIntoVisionPost {
   heroImage?: StepIntoVisionMedia | null
   locale: string
   author: string
-  license: string
+  license: StepIntoVisionLicenseType
   version: number
   normalized: boolean
   verbatim: boolean
@@ -108,6 +128,8 @@ export interface StepIntoVisionPost {
   assetLicense?: string | null
   code: StepIntoVisionCodeMetadata
   status?: StepIntoVisionStatus | null
+  keywords?: string[]
+  warnings?: string[]
 }
 
 export interface StepIntoVisionPostMetaDocument {
@@ -128,10 +150,7 @@ export interface StepIntoVisionPostMetaDocument {
     name: string
     url?: string
   }
-  license: {
-    type: string
-    url?: string
-  }
+  license: StepIntoVisionLicense
   contentType: "text/markdown"
   wordCount: number
   tokenCount: number

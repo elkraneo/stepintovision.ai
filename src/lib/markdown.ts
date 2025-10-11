@@ -5,9 +5,9 @@ import type {
   StepIntoVisionPost,
 } from "./types"
 import {
+  analyzeMarkdown,
   canonicalizeMarkdown,
   ensureCodeFenceLanguages,
-  extractCodeMetadata,
 } from "./markdown-utils"
 
 export interface RenderedPostMarkdown {
@@ -44,12 +44,13 @@ export function buildRenderedPostMarkdown(post: StepIntoVisionPost): RenderedPos
   const raw = lines.join("\n")
   let markdown = canonicalizeMarkdown(raw)
   markdown = ensureCodeFenceLanguages(markdown)
-  const code = extractCodeMetadata(markdown)
+  markdown = canonicalizeMarkdown(markdown)
+  const analysis = analyzeMarkdown(markdown)
   const digest = createHash("sha256").update(markdown, "utf8").digest("hex")
 
   return {
     markdown,
-    code,
+    code: analysis.code,
     contentDigest: `sha256-${digest}`,
   }
 }

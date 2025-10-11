@@ -12,7 +12,14 @@ import type {
   StepIntoVisionStatus,
   StepIntoVisionReferenceRole,
 } from "./types"
-import { canonicalizeMarkdown } from "./markdown-utils"
+import {
+  analyzeMarkdown,
+  canonicalizeMarkdown,
+  ensureCodeFenceLanguages,
+  extractKeywordCandidates,
+  normalizeMarkdownProse,
+  tokenizeKeywordText,
+} from "./markdown-utils"
 import { buildRenderedPostMarkdown } from "./markdown"
 import { inferCodeLanguage } from "./code-language"
 
@@ -297,7 +304,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
   const status = prepared.status
   const media = buildMediaList(heroImage, mediaItems)
   const authorName = extractAuthorName(post)
-  const wordCount = contentText.split(/\s+/).filter(Boolean).length
+  const wordCount = prepared.wordCount
   const tokenCount = Math.max(1, Math.round(wordCount * 1.3))
   const readingTimeSeconds = Math.max(30, Math.round((wordCount / 200) * 60))
 
@@ -490,27 +497,6 @@ function normalizeResizableSubject(subject: string): string {
   return subject.replace(/\bearth\b/gi, "Earth").trim()
 }
 
-function normalizeProseNodes($: ReturnType<typeof load>) {
-  const nodes = $.root().find("*").addBack().contents().toArray()
-  for (const node of nodes) {
-    if (node.type !== "text") {
-      continue
-    }
-
-    const parent = node.parent as { name?: string } | undefined
-    const parentName = parent?.name?.toLowerCase?.() ?? ""
-    if (parentName && ["code", "pre", "script", "style", "textarea"].includes(parentName)) {
-      continue
-    }
-
-    const original = (node.data ?? "").toString()
-    const normalized = applyGrammarFixesToProse(original)
-    if (normalized !== original) {
-      node.data = normalized
-    }
-  }
-}
-
 interface PrepareContentContext {
   publishedAt?: string
   updatedAt?: string
@@ -520,6 +506,7 @@ interface PreparedContent {
   html: string
   markdown: string
   text: string
+  wordCount: number
   seeAlso: StepIntoVisionSeeAlsoItem[]
   references: StepIntoVisionSeeAlsoItem[]
   media: StepIntoVisionMedia[]
@@ -695,34 +682,26 @@ function prepareContent(rawHtml: string, context: PrepareContentContext = {}): P
   const assetData = collectAssetMetadata($)
   const videoUrl = collectVideoUrl($)
 
-  normalizeProseNodes($)
-
   const status = extractStatus($, context)
 
   const cleanedHtml = $.root().html()?.trim() ?? ""
 
-  const markdown = turndown.turndown(cleanedHtml)
-  const normalizedMarkdown = canonicalizeMarkdown(markdown.trim())
-  const baseReferences = collectReferenceLinks($)
-  const references = augmentReferencesWithApiMentions(baseReferences, normalizedMarkdown)
-  const links = filterLinksAgainstReferences(developerLinks, references)
+  let markdown = turndown.turndown(cleanedHtml).trim()
+  markdown = canonicalizeMarkdown(markdown)
+  markdown = normalizeMarkdownProse(markdown, applyGrammarFixesToProse)
+  markdown = ensureCodeFenceLanguages(markdown)
+  markdown = canonicalizeMarkdown(markdown)
+  const analysis = analyzeMarkdown(markdown)
 
-  const text = htmlToText(cleanedHtml, {
-    wordwrap: false,
-    selectors: [
-      { selector: "a", options: { ignoreHref: true } },
-      { selector: "img", format: "skip" },
-    ],
-    preserveNewlines: true,
-  })
-    .replace(/\s+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
+  const baseReferences = collectReferenceLinks($)
+  const references = augmentReferencesWithApiMentions(baseReferences, markdown)
+  const links = filterLinksAgainstReferences(developerLinks, references)
 
   return {
     html: cleanedHtml,
-    markdown: normalizedMarkdown,
-    text,
+    markdown,
+    text: analysis.text,
+    wordCount: analysis.wordCount,
     seeAlso: dedupeSeeAlso(seeAlsoItems),
     references,
     media: dedupeMedia(mediaItems),
@@ -813,7 +792,13 @@ function collectReferenceLinks($: ReturnType<typeof load>): StepIntoVisionSeeAls
       role = inferReferenceRole(hostname)
     }
 
-    links.push({ title, url: normalizedHref, role })
+    links.push({
+      title,
+      url: normalizedHref,
+      role,
+      sourceType: "thirdParty",
+      rel: "supporting",
+    })
   })
 
   return dedupeSeeAlso(links)
@@ -826,7 +811,13 @@ function augmentReferencesWithApiMentions(
   const matches: StepIntoVisionSeeAlsoItem[] = []
   for (const candidate of API_REFERENCE_PATTERNS) {
     if (candidate.pattern.test(markdown)) {
-      matches.push({ title: candidate.title, url: candidate.url, role: "docs" })
+      matches.push({
+        title: candidate.title,
+        url: candidate.url,
+        role: "docs",
+        sourceType: "thirdParty",
+        rel: "supporting",
+      })
     }
   }
 
@@ -841,7 +832,7 @@ function dedupeSeeAlso(items: StepIntoVisionSeeAlsoItem[]): StepIntoVisionSeeAls
   const seen = new Set<string>()
   const result: StepIntoVisionSeeAlsoItem[] = []
   for (const item of items) {
-    const key = `${item.title}|${item.url}|${item.role ?? ""}`
+    const key = `${item.title}|${item.url}|${item.role ?? ""}|${item.sourceType ?? ""}|${item.rel ?? ""}`
     if (!seen.has(key)) {
       seen.add(key)
       result.push(item)
@@ -854,7 +845,7 @@ function dedupeLinks(items: StepIntoVisionLink[]): StepIntoVisionLink[] {
   const seen = new Set<string>()
   const result: StepIntoVisionLink[] = []
   for (const item of items) {
-    const key = `${item.role}|${item.url}`
+    const key = `${item.role}|${item.url}|${item.sourceType ?? ""}|${item.rel ?? ""}`
     if (!seen.has(key)) {
       seen.add(key)
       result.push(item)
@@ -958,7 +949,13 @@ function collectDeveloperLinks($: ReturnType<typeof load>): StepIntoVisionLink[]
       return
     }
 
-    const entry: StepIntoVisionLink = { role, url: normalizedHref }
+    const sourceType = isInternalHost(hostname) ? "firstParty" : "thirdParty"
+    const entry: StepIntoVisionLink = {
+      role,
+      url: normalizedHref,
+      sourceType,
+      rel: role === "series" && sourceType === "firstParty" ? "canonical" : "supporting",
+    }
     if (title) {
       entry.title = title
     }

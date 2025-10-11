@@ -1,10 +1,15 @@
+import { createHash } from "node:crypto"
+
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"
+import stringify from "json-stable-stringify"
 import { z } from "zod"
 
 import { getPostById, getPostBySlug, listPosts, searchPosts } from "./catalog"
 import { buildRenderedPostMarkdown, renderPostMarkdown } from "./markdown"
+import { extractKeywordCandidates, tokenizeKeywordText } from "./markdown-utils"
 import type { RenderedPostMarkdown } from "./markdown"
 import type { StepIntoVisionPost, StepIntoVisionPostMetaDocument } from "./types"
+import { assertValidMetaDocument } from "./schema"
 
 const MARKDOWN_MIME_TYPE = "text/markdown"
 const JSON_MIME_TYPE = "application/json"
@@ -46,126 +51,54 @@ function ensureContentDigest(post: StepIntoVisionPost, rendered: RenderedPostMar
   }
 }
 
-const STOP_KEYWORDS = new Set([
-  "example code",
-  "news",
-  "uncategorized",
-  "updates",
-])
-
-const SLUG_STOP_WORDS = new Set([
-  "a",
-  "an",
-  "and",
-  "are",
-  "can",
-  "for",
-  "how",
-  "in",
-  "is",
-  "of",
-  "on",
-  "the",
-  "to",
-  "use",
-  "using",
-  "we",
-  "what",
-  "with",
-])
-
-function normalizeKeyword(value: string): string | null {
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return null
-  }
-  if (STOP_KEYWORDS.has(trimmed.toLowerCase())) {
-    return null
-  }
-  return trimmed
+function computeMetaDocumentDigest(
+  meta: Omit<StepIntoVisionPostMetaDocument, "contentDigest">,
+): string {
+  const canonical = stringify(meta)
+  const hash = createHash("sha256").update(canonical, "utf8").digest("hex")
+  return `sha256-${hash}`
 }
 
-function addKeyword(store: Map<string, string>, value: string) {
-  const normalized = normalizeKeyword(value)
-  if (!normalized) {
-    return
-  }
-  const key = normalized.toLowerCase()
-  if (!store.has(key)) {
-    store.set(key, normalized)
-  }
-}
+function buildKeywords(post: StepIntoVisionPost, rendered: RenderedPostMarkdown): string[] {
+  const counts = new Map<string, number>()
 
-function collectInlineCodeKeywords(markdown: string): string[] {
-  const matches = markdown.match(/`([^`]+)`/g) ?? []
-  const tokens: string[] = []
-  for (const match of matches) {
-    const token = match.slice(1, -1).trim()
-    if (token.length < 3) {
-      continue
-    }
-    if (/^[a-z0-9\-]+$/i.test(token)) {
-      tokens.push(token)
-    }
-  }
-  return tokens
-}
-
-function collectReferenceKeywords(post: StepIntoVisionPost): string[] {
-  const keywords: string[] = []
-  for (const reference of post.references) {
-    const parts = reference.title.split(/[^A-Za-z0-9_.]+/)
-    for (const part of parts) {
-      if (!part) {
+  const addTokens = (tokens: string[], weight = 1) => {
+    for (const token of tokens) {
+      if (!token) {
         continue
       }
-      if (/^[A-Z][A-Za-z0-9_.]*$/.test(part)) {
-        keywords.push(part)
-      }
+      const lower = token.toLowerCase()
+      counts.set(lower, (counts.get(lower) ?? 0) + weight)
     }
   }
-  return keywords
-}
 
-function collectSlugKeywords(slug: string): string[] {
-  const parts = slug.split(/[-_]+/)
-  const result: string[] = []
-  for (const part of parts) {
-    const lower = part.toLowerCase()
-    if (!lower || SLUG_STOP_WORDS.has(lower)) {
-      continue
-    }
-    if (lower.length >= 3 && /^[a-z0-9]+$/.test(lower)) {
-      result.push(lower)
-    }
-  }
-  return result
-}
-
-function buildKeywords(post: StepIntoVisionPost): string[] {
-  const keywordMap = new Map<string, string>()
+  addTokens(extractKeywordCandidates(rendered.markdown), 2)
 
   for (const category of post.categories) {
-    addKeyword(keywordMap, category)
+    addTokens(tokenizeKeywordText(category), 3)
   }
 
   for (const tag of post.tags) {
-    addKeyword(keywordMap, tag)
+    addTokens(tokenizeKeywordText(tag), 3)
   }
 
-  for (const token of collectInlineCodeKeywords(post.contentMarkdown)) {
-    addKeyword(keywordMap, token)
+  for (const reference of post.references) {
+    addTokens(tokenizeKeywordText(reference.title), 1)
   }
 
-  for (const token of collectReferenceKeywords(post)) {
-    addKeyword(keywordMap, token)
-  }
+  addTokens(tokenizeKeywordText(post.slug.replace(/[-_]+/g, " ")), 1)
 
-  for (const token of collectSlugKeywords(post.slug)) {
-    addKeyword(keywordMap, token)
-  }
+  const sorted = Array.from(counts.entries())
+    .sort((a, b) => {
+      if (b[1] !== a[1]) {
+        return b[1] - a[1]
+      }
+      return a[0].localeCompare(b[0])
+    })
+    .slice(0, 12)
+    .map(([token]) => token)
 
-  return Array.from(keywordMap.values()).sort((a, b) => a.localeCompare(b))
+  return sorted
 }
 
 export function buildResourceMeta(
@@ -175,7 +108,7 @@ export function buildResourceMeta(
   const markdownUri = buildResourceUri(post)
   const computed = options.rendered ?? buildRenderedPostMarkdown(post)
   ensureContentDigest(post, computed)
-  const keywords = buildKeywords(post)
+  const keywords = buildKeywords(post, computed)
   return {
     schema: "mcp.post.v1",
     canonicalUrl: post.link,
@@ -221,8 +154,8 @@ export function buildMetaDocument(
   const markdownUri = buildResourceUri(post)
   const computed = options.rendered ?? buildRenderedPostMarkdown(post)
   ensureContentDigest(post, computed)
-  const keywords = buildKeywords(post)
-  const meta: StepIntoVisionPostMetaDocument = {
+  const keywords = buildKeywords(post, computed)
+  const baseMeta: Omit<StepIntoVisionPostMetaDocument, "contentDigest"> = {
     schema: "mcp.post.v1",
     id: String(post.id),
     slug: post.slug,
@@ -259,28 +192,32 @@ export function buildMetaDocument(
       role: link.role,
       url: link.url,
       ...(link.title ? { title: link.title } : {}),
+      ...(link.sourceType ? { sourceType: link.sourceType } : {}),
+      ...(link.rel ? { rel: link.rel } : {}),
     })),
     version: post.version,
-    contentDigest: computed.contentDigest,
   }
   if (keywords.length > 0) {
-    meta.keywords = keywords
+    baseMeta.keywords = keywords
   }
   if (post.status) {
-    meta.status = post.status
+    baseMeta.status = post.status
   }
   if (post.videoUrl) {
-    meta.videoUrl = post.videoUrl
+    baseMeta.videoUrl = post.videoUrl
   }
   if (post.assetSourceUrl) {
-    meta.assetSourceUrl = post.assetSourceUrl
+    baseMeta.assetSourceUrl = post.assetSourceUrl
   }
   if (post.assetAuthor) {
-    meta.assetAuthor = post.assetAuthor
+    baseMeta.assetAuthor = post.assetAuthor
   }
   if (post.assetLicense) {
-    meta.assetLicense = post.assetLicense
+    baseMeta.assetLicense = post.assetLicense
   }
+  const contentDigest = computeMetaDocumentDigest(baseMeta)
+  const meta: StepIntoVisionPostMetaDocument = { ...baseMeta, contentDigest }
+  assertValidMetaDocument(meta)
   return meta
 }
 
