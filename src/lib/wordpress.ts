@@ -42,6 +42,21 @@ interface WordPressPost {
 }
 
 const DEFAULT_BASE_URL = "https://stepinto.vision"
+const USER_AGENT = "stepinto-vision-ingest/1.0 (+https://stepinto.vision)"
+
+function buildWordPressPostsUrl(baseUrl: string): URL {
+  const trimmed = baseUrl.trim()
+  if (trimmed.length === 0) {
+    throw new Error("Base URL cannot be empty")
+  }
+
+  if (trimmed.includes("/wp-json/")) {
+    return new URL(trimmed)
+  }
+
+  return new URL("/wp-json/wp/v2/posts", trimmed)
+}
+
 const DEFAULT_PER_PAGE = 50
 const DEFAULT_MAX_PAGES = 10
 
@@ -58,7 +73,7 @@ export async function fetchWordPressPosts(options: WordPressIngestOptions = {}):
   const posts: StepIntoVisionPost[] = []
 
   for (let page = 1; page <= maxPages; page += 1) {
-    const url = new URL("/wp-json/wp/v2/posts", baseUrl)
+    const url = buildWordPressPostsUrl(baseUrl)
     url.searchParams.set("per_page", String(perPage))
     url.searchParams.set("page", String(page))
     url.searchParams.set("orderby", "modified")
@@ -85,6 +100,7 @@ export async function fetchWordPressPosts(options: WordPressIngestOptions = {}):
       response = await fetch(url, {
         headers: {
           "Accept": "application/json",
+          "User-Agent": USER_AGENT,
         },
         signal,
       })
@@ -95,7 +111,18 @@ export async function fetchWordPressPosts(options: WordPressIngestOptions = {}):
     }
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch WordPress posts: ${response.status} ${response.statusText}`)
+      let message = `Failed to fetch WordPress posts: ${response.status} ${response.statusText}`
+      try {
+        const body = await response.json()
+        if (body && typeof body === "object" && "message" in body && typeof body.message === "string") {
+          message = `${message} — ${body.message}`
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message) {
+          message = `${message} (response body was not JSON: ${error.message})`
+        }
+      }
+      throw new Error(message)
     }
 
     const data = (await response.json()) as WordPressPost[]

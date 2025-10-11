@@ -42,8 +42,8 @@ npm run ingest
 ```
 
 Use `--help` to list additional options including pagination controls and an
-alternative base URL for staging or archived copies. Pass extra arguments after
-`--` when using `npm run` so the CLI receives them:
+alternative base URL for staged environments. Pass extra arguments after `--`
+when using `npm run` so the CLI receives them:
 
 ```bash
 npm run ingest -- --base-url https://mirror.example.com
@@ -52,22 +52,8 @@ npm run ingest -- --base-url https://mirror.example.com
 For convenience the first positional argument is also treated as a base URL, so
 `npm run ingest https://mirror.example.com` works if you forget the `--` (npm
 will emit a warning but still pass the value through). The CLI also respects the
-`STEPINTOVISION_BASE_URL` environment variable, which is useful when the
-production domain is inaccessible from your network.
-
-When direct HTTPS access to WordPress is unavailable, download the JSON export
-with a tool like `curl` and feed it to the CLI instead:
-
-```bash
-curl "https://mirror.example.com/wp-json/wp/v2/posts?per_page=50&_embed=true" \
-  | npm run ingest -- --source file --input -
-```
-
-You can also point `--input` at a saved file:
-
-```bash
-npm run ingest -- --source file --input ./exports/posts.json
-```
+`STEPINTOVISION_BASE_URL` environment variable when you need to target an
+alternate deployment.
 
 ### Run the Development Server
 
