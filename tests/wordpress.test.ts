@@ -25,6 +25,7 @@ describe("normalizeWordPressPost", () => {
             <pre class="shiki light-plus"><code class="language-swift"><span class="line">struct Example: View {}</span></code></pre>
           </div>
           <p>For background, see <a href="https://developer.apple.com/documentation/swiftui/edge3d/set">Edge3D.Set</a>.</p>
+          <p>Follow the <a href="https://stepinto.vision/learn-visionos/#spatial">Spatial overview</a>.</p>
           <p>We’ll use this <a href="https://opengameart.org/content/a-bird-animation">blue bird</a> image from OpenGameArt, thanks to <strong><a href="https://opengameart.org/users/komiro100">komiro100</a></strong> (CC0).</p>
           <p>See also</p>
           <ul class="wp-block-list">
@@ -85,6 +86,16 @@ describe("normalizeWordPressPost", () => {
     ])
     expect(post.links).toEqual([
       {
+        role: "docs",
+        url: "https://developer.apple.com/documentation/swiftui/edge3d/set",
+        title: "Edge3D.Set",
+      },
+      {
+        role: "series",
+        url: "https://stepinto.vision/learn-visionos/#spatial",
+        title: "Spatial overview",
+      },
+      {
         role: "repo",
         url: "https://github.com/stepintovision/realitykit-sample",
         title: "GitHub Repo",
@@ -103,7 +114,7 @@ describe("normalizeWordPressPost", () => {
     ])
     expect(post.locale).toBe("en")
     expect(post.author).toBe("Joseph Simpson")
-    expect(post.license).toBe("All rights reserved")
+    expect(post.license).toBe("AllRightsReserved")
     expect(post.contentDigest).toMatch(/^sha256-/)
     expect(post.excerpt).toContain("ways to convert values")
     expect(post.wordCount).toBeGreaterThan(0)

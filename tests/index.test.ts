@@ -36,7 +36,7 @@ beforeAll(async () => {
         heroImage: null,
         locale: "en",
         author: "Step Into Vision",
-        license: "All rights reserved",
+        license: "AllRightsReserved",
         version: 1,
         normalized: true,
         verbatim: false,

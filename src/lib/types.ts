@@ -13,7 +13,13 @@ export interface StepIntoVisionSeeAlsoItem {
   url: string
 }
 
-export type StepIntoVisionLinkRole = "download" | "repo" | "docs" | "video" | "asset"
+export type StepIntoVisionLinkRole =
+  | "download"
+  | "repo"
+  | "docs"
+  | "video"
+  | "asset"
+  | "series"
 
 export interface StepIntoVisionLink {
   role: StepIntoVisionLinkRole

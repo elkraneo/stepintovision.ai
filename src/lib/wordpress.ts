@@ -74,7 +74,7 @@ interface WordPressPost {
 const DEFAULT_BASE_URL = "https://stepinto.vision"
 const USER_AGENT = "stepinto-vision-ingest/1.0 (+https://stepinto.vision)"
 const DEFAULT_LOCALE = "en"
-const DEFAULT_LICENSE = "All rights reserved"
+const DEFAULT_LICENSE = "AllRightsReserved"
 const DEFAULT_AUTHOR = "Step Into Vision"
 
 const turndown = new TurndownService({
@@ -373,7 +373,9 @@ function cleanUrl(url: string | undefined): string | undefined {
   try {
     const parsed = new URL(url)
     parsed.search = ""
-    parsed.hash = ""
+    if (parsed.hash === "#") {
+      parsed.hash = ""
+    }
     return parsed.toString()
   } catch {
     return url
@@ -405,6 +407,33 @@ function fixCommonGrammar(value: string): string {
   return value
     .replace(/ways to values convert/gi, "ways to convert values")
     .replace(/\bxtension\b/gi, "extension")
+    .replace(/\bThis use\b/gi, (match) =>
+      match[0] === "T" ? "This uses" : "this uses",
+    )
+    .replace(/using\s+spatialOverlay\s+wrap/gi, (match) =>
+      match[0] === "U"
+        ? "Using .spatialOverlay, wrap"
+        : "using .spatialOverlay, wrap",
+    )
+    .replace(/\bmark the ([^.,;]+?) as resizable\b/gi, (match, subject: string) => {
+      const base = `make the ${subject} resizable`
+      return match[0] === "M"
+        ? base.replace(/^./, (char) => char.toUpperCase())
+        : base
+    })
+    .replace(/\\`/g, "`")
+}
+
+function canonicalizeMarkdown(value: string): string {
+  const normalizedLineEndings = value.replace(/\r\n/g, "\n")
+  const trimmedLines = normalizedLineEndings
+    .split("\n")
+    .map((line) => line.replace(/\s+$/g, ""))
+  let canonical = trimmedLines.join("\n").trim()
+  if (!canonical.endsWith("\n")) {
+    canonical += "\n"
+  }
+  return canonical
 }
 
 interface PreparedContent {
@@ -601,7 +630,7 @@ function prepareContent(rawHtml: string): PreparedContent {
   const cleanedHtml = fixCommonGrammar($.root().html()?.trim() ?? "")
 
   const markdown = turndown.turndown(cleanedHtml)
-  const normalizedMarkdown = fixCommonGrammar(markdown.trim())
+  const normalizedMarkdown = canonicalizeMarkdown(fixCommonGrammar(markdown.trim()))
 
   const text = fixCommonGrammar(
     htmlToText(cleanedHtml, {
@@ -663,6 +692,7 @@ function inferCodeLanguage(code: string): string | null {
     "Edge3D.",
     "rotation3DLayout",
     "ModelViewSimple",
+    "Model3D",
     "RealityView",
     "RealityViewContent",
   ]
@@ -800,7 +830,18 @@ function collectDeveloperLinks($: ReturnType<typeof load>): StepIntoVisionLink[]
     }
 
     const normalizedHref = cleanUrl(href)
-    if (!normalizedHref || !normalizedHref.includes("github.com")) {
+    if (!normalizedHref) {
+      return
+    }
+
+    let hostname: string | null = null
+    try {
+      hostname = new URL(normalizedHref).hostname.toLowerCase()
+    } catch {
+      hostname = null
+    }
+
+    if (!hostname) {
       return
     }
 
@@ -808,16 +849,26 @@ function collectDeveloperLinks($: ReturnType<typeof load>): StepIntoVisionLink[]
     const text = $(element).text().trim()
     const title = text || normalizedHref
 
-    let role: StepIntoVisionLinkRole = "repo"
-    if (lowerHref.endsWith(".zip") || lowerHref.includes("/archive/")) {
-      role = "download"
+    let role: StepIntoVisionLinkRole | null = null
+    if (hostname.includes("github.com")) {
+      role = lowerHref.endsWith(".zip") || lowerHref.includes("/archive/") ? "download" : "repo"
+    } else if (hostname.includes("developer.apple.com")) {
+      role = "docs"
+    } else if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) {
+      role = "video"
+    } else if (hostname.endsWith("stepinto.vision") && lowerHref.includes("/learn-visionos")) {
+      role = "series"
     }
 
-    links.push({
-      role,
-      url: normalizedHref,
-      title,
-    })
+    if (!role) {
+      return
+    }
+
+    const entry: StepIntoVisionLink = { role, url: normalizedHref }
+    if (title) {
+      entry.title = title
+    }
+    links.push(entry)
   })
 
   return dedupeLinks(links)
