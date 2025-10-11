@@ -21,9 +21,17 @@ function parseArgs(argv: string[]): CliOptions {
     delayMs: 0,
   }
 
+  const positional: string[] = []
+
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
+
+    if (arg === "--") {
+      continue
+    }
+
     if (!arg.startsWith("--")) {
+      positional.push(arg)
       continue
     }
 
@@ -77,22 +85,33 @@ function parseArgs(argv: string[]): CliOptions {
     }
   }
 
+  if (positional.length > 0) {
+    options.baseUrl = positional[0]
+    if (positional.length > 1) {
+      throw new Error(`Unexpected positional arguments: ${positional.slice(1).join(", ")}`)
+    }
+  }
+
   return options
 }
 
 function printHelp() {
+  const defaultBaseUrl = process.env.STEPINTOVISION_BASE_URL ?? "https://stepintovision.ai"
   console.log(`Step Into Vision ingestion
 
-Usage: npm run ingest -- [options]
+Usage: npm run ingest -- [options] [base-url]
 
 Options:
-  --base-url <url>          Base WordPress site URL (default: ${process.env.STEPINTOVISION_BASE_URL ?? "https://stepintovision.ai"})
+  --base-url <url>          Base WordPress site URL (default: ${defaultBaseUrl})
   --per-page <number>       Number of posts per request (default: 50)
   --max-pages <number>      Maximum number of pages to fetch (default: 10)
   --modified-after <date>   Only fetch posts modified after ISO date
   --output <file>           Output catalog file (default: ${DEFAULT_CATALOG_PATH})
   --delay-ms <number>       Delay between requests in milliseconds (default: 0)
   --help                    Show this message
+
+Positional arguments:
+  base-url                  Equivalent to --base-url for npm run ingest users
 `)
 }
 
