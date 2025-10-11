@@ -32,13 +32,27 @@ final class StepIntoVisionToolTests: XCTestCase {
     }
 
     func testListPostsReturnsNewestFirstAndProvidesPaging() throws {
-        let payload = try toolResponses.listPosts(arguments: ListPostsArguments(limit: 10, offset: 0, categorySlug: nil, tagSlug: nil))
+        let result = try toolResponses.listPosts(arguments: ListPostsArguments(limit: 10, offset: 0, categorySlug: nil, tagSlug: nil))
+        XCTAssertTrue(result.displayText.contains("Showing"))
+        XCTAssertTrue(result.displayText.contains("Fetched:"))
+
+        let payload = result.payload
         let count = payload["count"] as? Int
         XCTAssertEqual(count, 3)
 
         let items = payload["items"] as? [[String: Any]]
         let slugs = items?.compactMap { $0["slug"] as? String }
         XCTAssertEqual(slugs, ["vision-update", "founders-letter", "welcome"])
+
+        if let metadataDates = items?.map({ ($0["modified_at"] as? String, $0["fetched_at"] as? String) }) {
+            XCTAssertEqual(metadataDates.count, 3)
+            metadataDates.forEach { modified, fetched in
+                XCTAssertNotNil(modified)
+                XCTAssertNotNil(fetched)
+            }
+        } else {
+            XCTFail("Expected metadata for each item")
+        }
 
         let paging = payload["paging"] as? [String: Any]
         XCTAssertEqual(paging?["offset"] as? Int, 0)
@@ -50,7 +64,10 @@ final class StepIntoVisionToolTests: XCTestCase {
     }
 
     func testListPostsFiltersByCategorySlug() throws {
-        let payload = try toolResponses.listPosts(arguments: ListPostsArguments(limit: nil, offset: nil, categorySlug: "product", tagSlug: nil))
+        let result = try toolResponses.listPosts(arguments: ListPostsArguments(limit: nil, offset: nil, categorySlug: "product", tagSlug: nil))
+        XCTAssertTrue(result.displayText.contains("category \"product\""))
+
+        let payload = result.payload
         let items = payload["items"] as? [[String: Any]]
         XCTAssertEqual(items?.count, 1)
         XCTAssertEqual(items?.first?["title"] as? String, "Vision Update")
@@ -61,10 +78,16 @@ final class StepIntoVisionToolTests: XCTestCase {
     }
 
     func testGetPostIncludesHtmlWhenRequested() throws {
-        let payload = try toolResponses.getPost(arguments: GetPostArguments(slug: "vision-update", postID: nil, includeHTML: true, includeText: false))
+        let result = try toolResponses.getPost(arguments: GetPostArguments(slug: "vision-update", postID: nil, includeHTML: true, includeText: false))
+        XCTAssertTrue(result.displayText.contains("HTML markup"))
+        XCTAssertTrue(result.displayText.contains("Fetched:"))
+
+        let payload = result.payload
         XCTAssertEqual(payload["slug"] as? String, "vision-update")
         XCTAssertNotNil(payload["content_html"] as? String)
         XCTAssertNil(payload["content_text"])
+        XCTAssertNotNil(payload["modified_at"] as? String)
+        XCTAssertNotNil(payload["fetched_at"] as? String)
 
         let categories = payload["categories"] as? [[String: Any]]
         XCTAssertEqual(categories?.first?["slug"] as? String, "product")
@@ -81,7 +104,11 @@ final class StepIntoVisionToolTests: XCTestCase {
     }
 
     func testSearchPostsMatchesAcrossContentAndHonorsHtmlFlag() throws {
-        let payload = try toolResponses.searchPosts(arguments: SearchPostsArguments(query: "Guides", limit: 5, offset: 0, includeHTML: true))
+        let result = try toolResponses.searchPosts(arguments: SearchPostsArguments(query: "Guides", limit: 5, offset: 0, includeHTML: true))
+        XCTAssertTrue(result.displayText.contains("Search results for \"Guides\""))
+        XCTAssertTrue(result.displayText.contains("Fetched:"))
+
+        let payload = result.payload
         XCTAssertEqual(payload["query"] as? String, "Guides")
         let items = payload["items"] as? [[String: Any]]
         XCTAssertEqual(items?.count, 1)
@@ -89,6 +116,8 @@ final class StepIntoVisionToolTests: XCTestCase {
         XCTAssertEqual(item?["slug"] as? String, "founders-letter")
         XCTAssertNotNil(item?["content_html"] as? String)
         XCTAssertNil(item?["content_text"])
+        XCTAssertNotNil(item?["modified_at"] as? String)
+        XCTAssertNotNil(item?["fetched_at"] as? String)
     }
 
     func testServerRegistersToolsWithOfficialSchemas() async throws {
@@ -115,6 +144,11 @@ final class StepIntoVisionToolTests: XCTestCase {
         let result = try await server.callToolForTesting(name: "list_posts", arguments: [:] as [String: Value])
         XCTAssertEqual(result.isError ?? false, false)
         XCTAssertEqual(result.content.count, 2)
+
+        guard case let .text(displayText) = result.content[0] else {
+            return XCTFail("Expected formatted text summary")
+        }
+        XCTAssertTrue(displayText.contains("Showing"))
 
         guard case let .resource(uri, mimeType, text) = result.content[1] else {
             return XCTFail("Expected resource content for JSON payload")
