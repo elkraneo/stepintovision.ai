@@ -134,7 +134,19 @@ export function canonicalizeMarkdown(value: string): string {
   return canonical
 }
 
-export function ensureCodeFenceLanguages(markdown: string): string {
+export interface EnsureCodeFenceLanguageOptions {
+  fixCodeFenceLanguage?: boolean
+}
+
+export function ensureCodeFenceLanguages(
+  markdown: string,
+  options: EnsureCodeFenceLanguageOptions = {},
+): string {
+  const { fixCodeFenceLanguage = true } = options
+  if (!fixCodeFenceLanguage) {
+    return markdown
+  }
+
   const lines = markdown.split("\n")
   const result = [...lines]
 
@@ -243,7 +255,7 @@ function extractCodeMetadataFromTree(root: Root): StepIntoVisionCodeMetadata {
     }
     const lang = (node.lang ?? "text").toLowerCase() || "text"
     const digest = createHash("sha256").update(node.value, "utf8").digest("hex")
-    const idBase = lang.replace(/[^a-z0-9]+/g, "-") || "code"
+    const idBase = lang || "text"
     blocks.push({
       id: `${idBase}-${digest.slice(0, 8)}`,
       lang,

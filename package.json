@@ -14,7 +14,8 @@
     "lint": "biome lint --apply .",
     "check": "npm run format && npm run lint",
     "cf-typegen": "wrangler types --out worker-configuration.d.ts",
-    "ingest": "tsx src/cli/ingest.ts"
+    "ingest": "tsx src/cli/ingest.ts",
+    "mcp:post-gen": "tsx src/cli/mcp-post-gen.ts"
   },
   "dependencies": {
     "@hono/mcp": "^0.1.4",
