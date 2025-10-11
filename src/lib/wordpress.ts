@@ -82,25 +82,9 @@ export async function fetchWordPressPosts(options: WordPressIngestOptions = {}):
     url.searchParams.set("orderby", "modified")
     url.searchParams.set("order", "desc")
     url.searchParams.set("_embed", "true")
-    url.searchParams.set(
-      "_fields",
-      [
-        "id",
-        "slug",
-        "link",
-        "date",
-        "modified",
-        "title",
-        "excerpt",
-        "content",
-        "categories",
-        "tags",
-        "_embedded",
-        "_embedded.wp:term",
-        "_embedded.wp:featuredmedia",
-        "_embedded.wp:featuredmedia.source_url",
-      ].join(","),
-    )
+    // WordPress strips embedded taxonomy and media data when `_fields` is
+    // present, even if `_embedded` is requested. Fetch the full payload so the
+    // ingestion pipeline can populate categories, tags, and hero images.
 
     if (modifiedAfter) {
       url.searchParams.set("modified_after", modifiedAfter)
@@ -197,6 +181,22 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     }
   }
 
+  if (categories.length === 0 && Array.isArray(post.categories)) {
+    for (const categoryId of post.categories) {
+      if (typeof categoryId === "number") {
+        categories.push(String(categoryId))
+      }
+    }
+  }
+
+  if (tags.length === 0 && Array.isArray(post.tags)) {
+    for (const tagId of post.tags) {
+      if (typeof tagId === "number") {
+        tags.push(String(tagId))
+      }
+    }
+  }
+
   const mediaGroups = Array.isArray(post._embedded?.["wp:featuredmedia"])
     ? (post._embedded?.["wp:featuredmedia"] as WordPressMedia[])
     : []
@@ -227,8 +227,8 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     link: post.link,
     publishedAt: post.date,
     updatedAt: post.modified,
-    categories,
-    tags,
+    categories: Array.from(new Set(categories)),
+    tags: Array.from(new Set(tags)),
     heroImage,
   }
 }

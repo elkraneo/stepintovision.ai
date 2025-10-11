@@ -46,6 +46,26 @@ describe("normalizeWordPressPost", () => {
     expect(post.contentHtml).not.toContain("<script")
     expect(post.contentText).toContain("Main content")
   })
+
+  it("falls back to numeric taxonomy IDs when embedded terms are absent", () => {
+    const rawPost = {
+      id: 200,
+      slug: "no-embed",
+      link: "https://stepinto.vision/no-embed",
+      date: "2024-03-01T00:00:00",
+      modified: "2024-03-02T00:00:00",
+      title: { rendered: "No Embed" },
+      excerpt: { rendered: "<p>Summary</p>" },
+      content: { rendered: "<p>Body</p>" },
+      categories: [1, 2],
+      tags: [3],
+    }
+
+    const post = normalizeWordPressPost(rawPost as never)
+
+    expect(post.categories).toEqual(["1", "2"])
+    expect(post.tags).toEqual(["3"])
+  })
 })
 
 describe("fetchWordPressPosts", () => {
@@ -81,7 +101,7 @@ describe("fetchWordPressPosts", () => {
     expect(result[0]?.slug).toBe("first")
   })
 
-  it("requests embedded taxonomy fields for categories and tags", async () => {
+  it("requests embedded taxonomy data so categories and tags are populated", async () => {
     const posts = [
       {
         id: 2,
@@ -110,15 +130,8 @@ describe("fetchWordPressPosts", () => {
 
     const requestedUrl = fetchMock.mock.calls[0]?.[0]
     expect(requestedUrl).toBeInstanceOf(URL)
-    const fieldsParam = (requestedUrl as URL).searchParams.get("_fields")
-    expect(fieldsParam?.split(",")).toEqual(
-      expect.arrayContaining([
-        "categories",
-        "tags",
-        "_embedded.wp:term",
-        "_embedded.wp:featuredmedia",
-        "_embedded.wp:featuredmedia.source_url",
-      ]),
-    )
+    const embedParam = (requestedUrl as URL).searchParams.get("_embed")
+    expect(embedParam).toBe("true")
+    expect((requestedUrl as URL).searchParams.has("_fields")).toBe(false)
   })
 })
