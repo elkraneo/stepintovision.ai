@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { buildMetaDocument, buildMetaResourceItem, buildResourceItem } from "../src/lib/mcp"
+import {
+  buildMetaDocument,
+  buildMetaResourceItem,
+  buildResourceItem,
+  createMcpServer,
+} from "../src/lib/mcp"
 import { normalizeWordPressPost } from "../src/lib/wordpress"
 
 function createSampleWordPressPost() {
@@ -96,6 +101,41 @@ describe("MCP resource metadata", () => {
     expect(resourceMeta.code?.blocks?.length).toBeGreaterThan(0)
     expect(metaDocument.code.blocks.length).toBeGreaterThan(0)
     expect(metaDocument.contentDigest).toMatch(/^sha256-/)
+  })
+
+  it("surfaces code metadata on list resources without fetching JSON sidecars", async () => {
+    const first = normalizeWordPressPost(createSampleWordPressPost() as never)
+    const secondRaw = createSampleWordPressPost()
+    secondRaw.id = 202
+    secondRaw.slug = "spatial-swiftui-model3d-phase"
+    secondRaw.link = "https://stepinto.vision/example-code/spatial-swiftui-model3d-phase/"
+    secondRaw.date = "2025-02-24T10:00:00"
+    secondRaw.modified = "2025-02-24T11:00:00"
+    secondRaw.content.rendered = `
+      <p>Another example using Model3D.</p>
+      <pre><code class="language-swift">Model3D(named: "Moon")</code></pre>
+    `
+    const second = normalizeWordPressPost(secondRaw as never)
+
+    const posts = [first, second]
+    const server = createMcpServer(async () => posts)
+    const tools = (server as unknown as { _registeredTools: Record<string, any> })._registeredTools
+    const listTool = tools.listStepIntoVisionPosts
+
+    const result = await listTool.callback({ limit: 10, offset: 0 }, {})
+    const structured = result.structuredContent as { resources?: Array<Record<string, unknown>> }
+    expect(structured.resources).toBeDefined()
+    expect(structured.resources).toHaveLength(2)
+
+    for (const [index, resource] of structured.resources!.entries()) {
+      expect(resource.annotations).toMatchObject({
+        lastModified: new Date(posts[index].updatedAt).toISOString(),
+      })
+      const meta = resource._meta as { code?: { blocks?: unknown[] } }
+      expect(meta).toBeDefined()
+      expect(meta.code?.blocks).toBeDefined()
+      expect(meta.code?.blocks?.length ?? 0).toBeGreaterThan(0)
+    }
   })
 })
 

@@ -33,12 +33,16 @@ function buildMetaName(post: StepIntoVisionPost): string {
   return `${post.slug}.meta.json`
 }
 
+interface BuildOptions {
+  rendered?: RenderedPostMarkdown
+}
+
 export function buildResourceMeta(
   post: StepIntoVisionPost,
-  rendered?: RenderedPostMarkdown,
+  options: BuildOptions = {},
 ): Record<string, unknown> {
   const markdownUri = buildResourceUri(post)
-  const computed = rendered ?? buildRenderedPostMarkdown(post)
+  const computed = options.rendered ?? buildRenderedPostMarkdown(post)
   return {
     schema: "mcp.post.v1",
     canonicalUrl: post.link,
@@ -57,8 +61,8 @@ export function buildResourceMeta(
   }
 }
 
-export function buildResourceItem(post: StepIntoVisionPost, rendered?: RenderedPostMarkdown) {
-  const computed = rendered ?? buildRenderedPostMarkdown(post)
+export function buildResourceItem(post: StepIntoVisionPost, options: BuildOptions = {}) {
+  const computed = options.rendered ?? buildRenderedPostMarkdown(post)
   return {
     uri: buildResourceUri(post),
     name: buildMarkdownName(post),
@@ -70,16 +74,16 @@ export function buildResourceItem(post: StepIntoVisionPost, rendered?: RenderedP
       priority: 0.8,
       lastModified: toIsoString(post.updatedAt),
     },
-    _meta: buildResourceMeta(post, computed),
+    _meta: buildResourceMeta(post, { rendered: computed }),
   }
 }
 
 export function buildMetaDocument(
   post: StepIntoVisionPost,
-  rendered?: RenderedPostMarkdown,
+  options: BuildOptions = {},
 ): StepIntoVisionPostMetaDocument {
   const markdownUri = buildResourceUri(post)
-  const computed = rendered ?? buildRenderedPostMarkdown(post)
+  const computed = options.rendered ?? buildRenderedPostMarkdown(post)
   const meta: StepIntoVisionPostMetaDocument = {
     schema: "mcp.post.v1",
     id: String(post.id),
@@ -135,8 +139,8 @@ export function buildMetaDocument(
   return meta
 }
 
-export function buildMetaResourceItem(post: StepIntoVisionPost, rendered?: RenderedPostMarkdown) {
-  const metaDocument = buildMetaDocument(post, rendered)
+export function buildMetaResourceItem(post: StepIntoVisionPost, options: BuildOptions = {}) {
+  const metaDocument = buildMetaDocument(post, options)
   return {
     uri: buildMetaUri(post),
     name: buildMetaName(post),
@@ -177,7 +181,7 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
       return {
         resources: posts.map((post) => {
           const rendered = buildRenderedPostMarkdown(post)
-          return buildResourceItem(post, rendered)
+          return buildResourceItem(post, { rendered })
         }),
         _meta: {
           total: posts.length,
@@ -225,7 +229,7 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
             title: post.title,
             mimeType: MARKDOWN_MIME_TYPE,
             text: rendered.markdown,
-            _meta: buildResourceMeta(post, rendered),
+            _meta: buildResourceMeta(post, { rendered }),
           },
         ],
       }
@@ -238,7 +242,7 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
       return {
         resources: posts.map((post) => {
           const rendered = buildRenderedPostMarkdown(post)
-          return buildMetaResourceItem(post, rendered)
+          return buildMetaResourceItem(post, { rendered })
         }),
         _meta: {
           total: posts.length,
@@ -277,7 +281,7 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
       }
 
       const rendered = buildRenderedPostMarkdown(post)
-      const metaDocument = buildMetaDocument(post, rendered)
+      const metaDocument = buildMetaDocument(post, { rendered })
       return {
         contents: [
           {
@@ -314,7 +318,7 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
     async ({ limit = 10, offset = 0, category, tag }) => {
       const posts = await loadPosts()
       const items = listPosts(posts, { limit, offset, category, tag })
-      const resources = items.map(buildResourceItem)
+      const resources = items.map((item) => buildResourceItem(item))
 
       return {
         content: [
@@ -425,7 +429,7 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
       const resources = hits
         .map((hit) => postBySlug.get(hit.slug))
         .filter((post): post is StepIntoVisionPost => Boolean(post))
-        .map(buildResourceItem)
+        .map((post) => buildResourceItem(post))
 
       const lines =
         hits.length === 0
