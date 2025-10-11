@@ -234,6 +234,14 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
   const contentText = prepared.text
   const seeAlso = prepared.seeAlso
   const developerLinks = prepared.developerLinks
+  const mediaItems = prepared.media
+  const repoUrl = prepared.repoUrl
+  const downloadUrl = prepared.downloadUrl
+  const videoUrl = prepared.videoUrl
+  const assetSourceUrl = prepared.assetSourceUrl
+  const assetAuthor = prepared.assetAuthor
+  const assetLicense = inferAssetLicense(assetSourceUrl, prepared.assetLicense)
+  const media = buildMediaList(heroImage, mediaItems)
   const wordCount = contentText.split(/\s+/).filter(Boolean).length
   const tokenCount = Math.max(1, Math.round(wordCount * 1.3))
   const readingTimeSeconds = Math.max(30, Math.round((wordCount / 200) * 60))
@@ -268,6 +276,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     categories: dedupeStrings(categories),
     tags: dedupeStrings(tags),
     heroImage,
+    media,
     locale: DEFAULT_LOCALE,
     author: DEFAULT_AUTHOR,
     license: DEFAULT_LICENSE,
@@ -275,6 +284,12 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     seeAlso,
     developerLinks,
     contentDigest: `sha256-${contentDigest}`,
+    repoUrl,
+    downloadUrl,
+    videoUrl,
+    assetSourceUrl,
+    assetAuthor,
+    assetLicense,
   }
 }
 
@@ -374,6 +389,13 @@ interface PreparedContent {
   text: string
   seeAlso: StepIntoVisionSeeAlsoItem[]
   developerLinks: StepIntoVisionSeeAlsoItem[]
+  media: StepIntoVisionMedia[]
+  repoUrl: string | null
+  downloadUrl: string | null
+  videoUrl: string | null
+  assetSourceUrl: string | null
+  assetAuthor: string | null
+  assetLicense: string | null
 }
 
 function prepareContent(rawHtml: string): PreparedContent {
@@ -383,6 +405,7 @@ function prepareContent(rawHtml: string): PreparedContent {
   $("span.code-block-pro-copy-button").remove()
 
   const seeAlsoItems: StepIntoVisionSeeAlsoItem[] = []
+  const mediaItems: StepIntoVisionMedia[] = []
 
   $("p").each((_, element) => {
     const text = $(element).text().trim().toLowerCase()
@@ -476,9 +499,14 @@ function prepareContent(rawHtml: string): PreparedContent {
       $(element).attr("src", cleanSrc)
     }
 
-    const trimmedAlt = alt?.trim() ?? ""
+    const figure = $(element).closest("figure")
+    const caption = figure.find("figcaption").first().text().trim()
+    let trimmedAlt = alt?.trim() ?? ""
+    if (!trimmedAlt && caption) {
+      trimmedAlt = caption
+    }
+
     if (!trimmedAlt) {
-      const figure = $(element).closest("figure")
       if (figure.length > 0) {
         figure.remove()
         return
@@ -497,7 +525,21 @@ function prepareContent(rawHtml: string): PreparedContent {
     if (height) {
       $(element).attr("height", height)
     }
+
+    if (cleanSrc) {
+      mediaItems.push({
+        role: "illustration",
+        url: cleanSrc,
+        alt: trimmedAlt,
+        width: width ? parseDimension(width) : null,
+        height: height ? parseDimension(height) : null,
+      })
+    }
   })
+
+  const developerData = collectDeveloperLinks($)
+  const assetData = collectAssetMetadata($)
+  const videoUrl = collectVideoUrl($)
 
   const cleanedHtml = fixCommonGrammar($.root().html()?.trim() ?? "")
 
@@ -523,7 +565,14 @@ function prepareContent(rawHtml: string): PreparedContent {
     markdown: normalizedMarkdown,
     text,
     seeAlso: dedupeSeeAlso(seeAlsoItems),
-    developerLinks: collectDeveloperLinks($),
+    developerLinks: developerData.links,
+    media: dedupeMedia(mediaItems),
+    repoUrl: developerData.repoUrl,
+    downloadUrl: developerData.downloadUrl,
+    videoUrl,
+    assetSourceUrl: assetData.assetSourceUrl,
+    assetAuthor: assetData.assetAuthor,
+    assetLicense: assetData.assetLicense,
   }
 }
 
@@ -593,8 +642,22 @@ function dedupeSeeAlso(items: StepIntoVisionSeeAlsoItem[]): StepIntoVisionSeeAls
   return result
 }
 
-function collectDeveloperLinks($: ReturnType<typeof load>): StepIntoVisionSeeAlsoItem[] {
+function parseDimension(value: string): number | null {
+  const numeric = Number.parseInt(value, 10)
+  return Number.isNaN(numeric) ? null : numeric
+}
+
+interface DeveloperLinkCollection {
+  links: StepIntoVisionSeeAlsoItem[]
+  repoUrl: string | null
+  downloadUrl: string | null
+}
+
+function collectDeveloperLinks($: ReturnType<typeof load>): DeveloperLinkCollection {
   const links: StepIntoVisionSeeAlsoItem[] = []
+  let repoUrl: string | null = null
+  let downloadUrl: string | null = null
+
   $("a[href]").each((_, element) => {
     const href = $(element).attr("href")?.trim()
     if (!href) {
@@ -606,7 +669,118 @@ function collectDeveloperLinks($: ReturnType<typeof load>): StepIntoVisionSeeAls
     }
     const title = $(element).text().trim() || normalizedHref
     links.push({ title, url: normalizedHref })
+
+    const lowerTitle = title.toLowerCase()
+    const lowerHref = normalizedHref.toLowerCase()
+    if (!repoUrl && !lowerHref.includes("/archive/")) {
+      repoUrl = normalizedHref
+    }
+    const suggestsDownload =
+      lowerTitle.includes("download") ||
+      lowerHref.includes("/archive/") ||
+      lowerHref.endsWith(".zip")
+    if (!downloadUrl && suggestsDownload) {
+      downloadUrl = normalizedHref
+    }
   })
 
-  return dedupeSeeAlso(links)
+  return {
+    links: dedupeSeeAlso(links),
+    repoUrl,
+    downloadUrl,
+  }
+}
+
+interface AssetMetadata {
+  assetSourceUrl: string | null
+  assetAuthor: string | null
+  assetLicense: string | null
+}
+
+function collectAssetMetadata($: ReturnType<typeof load>): AssetMetadata {
+  let assetSourceUrl: string | null = null
+  let assetAuthor: string | null = null
+  let assetLicense: string | null = null
+
+  $("a[href]").each((_, element) => {
+    const href = $(element).attr("href")?.trim()
+    if (!href) {
+      return
+    }
+    const normalizedHref = cleanUrl(href)
+    if (!normalizedHref) {
+      return
+    }
+
+    const lowerHref = normalizedHref.toLowerCase()
+    if (!assetSourceUrl && lowerHref.includes("opengameart.org/content/")) {
+      assetSourceUrl = normalizedHref
+      const contextText = $(element).closest("p").text()
+      if (/cc0/i.test(contextText)) {
+        assetLicense = "CC0"
+      }
+    }
+
+    if (!assetAuthor && lowerHref.includes("opengameart.org/users/")) {
+      const text = $(element).text().trim()
+      assetAuthor = text || normalizedHref.split("/").pop() || null
+    }
+
+    if (!assetLicense && /cc0/i.test($(element).text())) {
+      assetLicense = "CC0"
+    }
+  })
+
+  return { assetSourceUrl, assetAuthor, assetLicense }
+}
+
+function collectVideoUrl($: ReturnType<typeof load>): string | null {
+  const iframe = $("iframe[src]").first()
+  if (iframe.length === 0) {
+    return null
+  }
+  const src = iframe.attr("src")?.trim()
+  if (!src) {
+    return null
+  }
+  const normalized = cleanUrl(src)
+  return normalized ?? src
+}
+
+function dedupeMedia(items: StepIntoVisionMedia[]): StepIntoVisionMedia[] {
+  const seen = new Set<string>()
+  const result: StepIntoVisionMedia[] = []
+  for (const item of items) {
+    const key = `${item.role}|${item.url}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      result.push(item)
+    }
+  }
+  return result
+}
+
+function buildMediaList(
+  heroImage: StepIntoVisionMedia | null,
+  mediaItems: StepIntoVisionMedia[],
+): StepIntoVisionMedia[] {
+  const combined: StepIntoVisionMedia[] = []
+  if (heroImage) {
+    combined.push(heroImage)
+  }
+  combined.push(...mediaItems)
+  return dedupeMedia(combined)
+}
+
+function inferAssetLicense(sourceUrl: string | null, current: string | null): string | null {
+  if (current) {
+    return current
+  }
+  if (!sourceUrl) {
+    return null
+  }
+  if (sourceUrl.toLowerCase().includes("opengameart.org/")) {
+    return "CC0"
+  }
+  return null
 }

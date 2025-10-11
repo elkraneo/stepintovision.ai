@@ -24,13 +24,16 @@ describe("normalizeWordPressPost", () => {
             <textarea class="code-block-pro-copy-button-textarea">struct Example: View {}</textarea>
             <pre class="shiki light-plus"><code class="language-swift"><span class="line">struct Example: View {}</span></code></pre>
           </div>
+          <p>We’ll use this <a href="https://opengameart.org/content/a-bird-animation">blue bird</a> image from OpenGameArt, thanks to <strong><a href="https://opengameart.org/users/komiro100">komiro100</a></strong> (CC0).</p>
           <p>See also</p>
           <ul class="wp-block-list">
             <li><a href="https://stepinto.vision/example-1/">Example 1</a></li>
           </ul>
           <p><a href="https://github.com/stepintovision/realitykit-sample">GitHub Repo</a></p>
           <p><a href="https://github.com/stepintovision/realitykit-sample/archive/refs/heads/main.zip">Download ZIP</a></p>
-          <figure class="wp-block-image"><img src="https://stepinto.vision/wp-content/uploads/example.jpg?resize=100" alt="Diagram" width="800" height="600" data-id="1" /></figure>
+          <figure class="wp-block-image"><img src="https://stepinto.vision/wp-content/uploads/example.jpg?resize=100" alt="" width="800" height="600" data-id="1" /><figcaption>Diagram alt</figcaption></figure>
+          <figure class="wp-block-image"><img src="https://stepinto.vision/wp-content/uploads/example-2.jpg" alt="Secondary figure" width="640" height="480" /></figure>
+          <div class="wp-block-embed is-type-video"><iframe src="https://player.vimeo.com/video/example"></iframe></div>
           <script>console.log('ignored')</script>
         `,
       },
@@ -91,6 +94,37 @@ describe("normalizeWordPressPost", () => {
     expect(post.wordCount).toBeGreaterThan(0)
     expect(post.tokenCount).toBeGreaterThan(0)
     expect(post.readingTimeSeconds).toBeGreaterThanOrEqual(30)
+    expect(post.media).toEqual([
+      {
+        role: "hero",
+        url: "https://stepinto.vision/wp-content/uploads/example.jpg",
+        alt: "Hero diagram",
+        width: 1600,
+        height: 900,
+      },
+      {
+        role: "illustration",
+        url: "https://stepinto.vision/wp-content/uploads/example.jpg",
+        alt: "Diagram alt",
+        width: 800,
+        height: 600,
+      },
+      {
+        role: "illustration",
+        url: "https://stepinto.vision/wp-content/uploads/example-2.jpg",
+        alt: "Secondary figure",
+        width: 640,
+        height: 480,
+      },
+    ])
+    expect(post.repoUrl).toBe("https://github.com/stepintovision/realitykit-sample")
+    expect(post.downloadUrl).toBe(
+      "https://github.com/stepintovision/realitykit-sample/archive/refs/heads/main.zip",
+    )
+    expect(post.assetSourceUrl).toBe("https://opengameart.org/content/a-bird-animation")
+    expect(post.assetAuthor).toBe("komiro100")
+    expect(post.assetLicense).toBe("CC0")
+    expect(post.videoUrl).toBe("https://player.vimeo.com/video/example")
   })
 
   it("falls back to numeric taxonomy IDs when embedded terms are absent", () => {

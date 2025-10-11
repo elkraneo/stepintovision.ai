@@ -41,6 +41,7 @@ beforeAll(async () => {
         seeAlso: [],
         developerLinks: [],
         contentDigest: "sha256-test",
+        media: [],
       },
     ],
   }

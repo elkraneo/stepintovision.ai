@@ -1,5 +1,7 @@
+export type StepIntoVisionMediaRole = "hero" | "illustration" | "video"
+
 export interface StepIntoVisionMedia {
-  role: "hero"
+  role: StepIntoVisionMediaRole
   url: string
   alt?: string | null
   width?: number | null
@@ -35,6 +37,13 @@ export interface StepIntoVisionPost {
   seeAlso: StepIntoVisionSeeAlsoItem[]
   developerLinks: StepIntoVisionSeeAlsoItem[]
   contentDigest: string
+  media: StepIntoVisionMedia[]
+  repoUrl?: string | null
+  downloadUrl?: string | null
+  videoUrl?: string | null
+  assetSourceUrl?: string | null
+  assetAuthor?: string | null
+  assetLicense?: string | null
 }
 
 export interface StepIntoVisionPostMetaDocument {
@@ -63,6 +72,12 @@ export interface StepIntoVisionPostMetaDocument {
   seeAlso: StepIntoVisionSeeAlsoItem[]
   developerLinks: StepIntoVisionSeeAlsoItem[]
   contentDigest: string
+  repoUrl?: string | null
+  downloadUrl?: string | null
+  videoUrl?: string | null
+  assetSourceUrl?: string | null
+  assetAuthor?: string | null
+  assetLicense?: string | null
 }
 
 export interface CatalogMetadata {

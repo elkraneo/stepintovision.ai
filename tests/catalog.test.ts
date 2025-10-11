@@ -29,6 +29,7 @@ const samplePosts: StepIntoVisionPost[] = [
     seeAlso: [],
     developerLinks: [],
     contentDigest: "sha256-hello",
+    media: [],
   },
   {
     id: 2,
@@ -54,6 +55,7 @@ const samplePosts: StepIntoVisionPost[] = [
     seeAlso: [],
     developerLinks: [],
     contentDigest: "sha256-dive",
+    media: [],
   },
 ]
 

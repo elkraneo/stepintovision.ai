@@ -42,8 +42,9 @@ function buildMetaName(post: StepIntoVisionPost): string {
 }
 
 function buildResourceMeta(post: StepIntoVisionPost): Record<string, unknown> {
-  const heroImage = post.heroImage ?? null
-  const media = heroImage ? [heroImage] : []
+  const heroImage =
+    post.media.find((item) => item.role === "hero") ?? post.heroImage ?? null
+  const media = post.media.length > 0 ? post.media : heroImage ? [heroImage] : []
   const markdownUri = buildResourceUri(post)
   return {
     schema: "mcp.post.v1",
@@ -68,6 +69,12 @@ function buildResourceMeta(post: StepIntoVisionPost): Record<string, unknown> {
     tokenCount: post.tokenCount,
     readingTimeSeconds: post.readingTimeSeconds,
     contentDigest: post.contentDigest,
+    repoIndexUrl: post.repoUrl ?? null,
+    downloadUrl: post.downloadUrl ?? null,
+    videoUrl: post.videoUrl ?? null,
+    assetSourceUrl: post.assetSourceUrl ?? null,
+    assetAuthor: post.assetAuthor ?? null,
+    assetLicense: post.assetLicense ?? null,
     alternateUrls: {
       aiReadable: buildAiReadableUrl(post),
     },
@@ -92,8 +99,9 @@ function buildResourceItem(post: StepIntoVisionPost) {
 }
 
 function buildMetaDocument(post: StepIntoVisionPost): StepIntoVisionPostMetaDocument {
-  const heroImage = post.heroImage ?? null
-  const media = heroImage ? [heroImage] : []
+  const heroImage =
+    post.media.find((item) => item.role === "hero") ?? post.heroImage ?? null
+  const media = post.media.length > 0 ? post.media : heroImage ? [heroImage] : []
   const markdownUri = buildResourceUri(post)
   return {
     schema: "mcp.post.v1",
@@ -121,6 +129,12 @@ function buildMetaDocument(post: StepIntoVisionPost): StepIntoVisionPostMetaDocu
     seeAlso: post.seeAlso,
     developerLinks: post.developerLinks,
     contentDigest: post.contentDigest,
+    repoUrl: post.repoUrl ?? null,
+    downloadUrl: post.downloadUrl ?? null,
+    videoUrl: post.videoUrl ?? null,
+    assetSourceUrl: post.assetSourceUrl ?? null,
+    assetAuthor: post.assetAuthor ?? null,
+    assetLicense: post.assetLicense ?? null,
   }
 }
 
