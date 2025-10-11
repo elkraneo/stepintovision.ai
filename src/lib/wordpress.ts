@@ -709,7 +709,9 @@ function prepareContent(rawHtml: string, context: PrepareContentContext = {}): P
   let links = filterLinksAgainstReferences(developerLinks, references)
 
   if (videoUrl) {
-    links = dedupeLinks([...links, buildVideoLink(videoUrl, videoTitle)])
+    const videoLink = buildVideoLink(videoUrl, videoTitle)
+    links = links.filter((link) => link.role !== "video")
+    links = dedupeLinks([...links, videoLink])
   }
 
   return {
@@ -1009,6 +1011,12 @@ function filterLinksAgainstReferences(
   })
 }
 
+const GENERIC_VIDEO_TITLE_PATTERNS = [
+  /^videopress\b/i,
+  /^video\s*player$/i,
+  /^watch\s*this\s*video$/i,
+]
+
 function buildVideoLink(url: string, title?: string | null): StepIntoVisionLink {
   let hostname: string | null = null
   try {
@@ -1026,7 +1034,17 @@ function buildVideoLink(url: string, title?: string | null): StepIntoVisionLink 
     rel: "supporting",
   }
 
-  const label = title?.trim() || "Video demo"
+  let label = title?.trim() ?? ""
+  if (label) {
+    const normalized = label.toLowerCase()
+    if (GENERIC_VIDEO_TITLE_PATTERNS.some((pattern) => pattern.test(normalized))) {
+      label = ""
+    }
+  }
+  if (!label) {
+    label = "Video demo"
+  }
+
   if (label) {
     entry.title = label
   }

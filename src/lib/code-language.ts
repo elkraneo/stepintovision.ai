@@ -34,6 +34,8 @@ export function inferCodeLanguage(code: string): string | null {
     "Model3D",
     "RealityView",
     "RealityViewContent",
+    "GeometryReader3D",
+    "GeometryProxy3D",
   ]
 
   if (swiftMarkers.some((marker) => trimmed.includes(marker))) {

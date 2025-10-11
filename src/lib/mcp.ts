@@ -112,6 +112,7 @@ export function buildResourceMeta(
   return {
     schema: "mcp.post.v1",
     canonicalUrl: post.link,
+    mcpResource: markdownUri,
     markdownUri,
     metaUri: buildMetaUri(post),
     contentType: MARKDOWN_MIME_TYPE,
@@ -165,6 +166,7 @@ export function buildMetaDocument(
     locale: post.locale,
     canonicalUrl: post.link,
     markdownUri,
+    mcpResource: markdownUri,
     publishedAt: toIsoString(post.publishedAt),
     updatedAt: toIsoString(post.updatedAt),
     categories: post.categories,
@@ -236,6 +238,7 @@ export function buildMetaResourceItem(post: StepIntoVisionPost, options: BuildOp
     _meta: {
       canonicalUrl: metaDocument.canonicalUrl,
       markdownUri: metaDocument.markdownUri,
+      mcpResource: metaDocument.mcpResource,
       schema: metaDocument.schema,
       contentDigest: metaDocument.contentDigest,
       version: metaDocument.version,

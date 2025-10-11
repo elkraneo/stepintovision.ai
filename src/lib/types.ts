@@ -142,6 +142,7 @@ export interface StepIntoVisionPostMetaDocument {
   locale: string
   canonicalUrl: string
   markdownUri: string
+  mcpResource: string
   publishedAt: string
   updatedAt: string
   categories: string[]

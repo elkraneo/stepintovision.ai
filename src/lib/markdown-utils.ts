@@ -54,6 +54,11 @@ const STOPWORDS = new Set([
   "through",
   "first",
   "move",
+  "example",
+  "content",
+  "overview",
+  "video",
+  "window",
 ])
 
 const KEYWORD_SHORT_ALLOW = new Set(["3d", "ar", "vr", "ai", "usd", "usdz", "usdc", "usda"])
@@ -151,8 +156,9 @@ export function ensureCodeFenceLanguages(markdown: string): string {
 
     const trimmedInfo = info.trim()
     const infoParts = trimmedInfo ? trimmedInfo.split(/\s+/) : []
-    const currentLang = infoParts[0] ?? ""
-    const remainder = trimmedInfo.slice(currentLang.length).trim()
+    const currentLangRaw = infoParts[0] ?? ""
+    const currentLang = currentLangRaw.toLowerCase()
+    const remainder = trimmedInfo.slice(currentLangRaw.length).trim()
 
     if (currentLang && currentLang !== "text" && currentLang !== "plain") {
       return

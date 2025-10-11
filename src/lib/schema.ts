@@ -16,6 +16,7 @@ const META_SCHEMA = {
     "locale",
     "canonicalUrl",
     "markdownUri",
+    "mcpResource",
     "publishedAt",
     "updatedAt",
     "categories",
@@ -46,6 +47,7 @@ const META_SCHEMA = {
     locale: { type: "string", minLength: 2 },
     canonicalUrl: { type: "string", format: "uri" },
     markdownUri: { type: "string", minLength: 1 },
+    mcpResource: { type: "string", format: "uri" },
     publishedAt: { type: "string", format: "date-time" },
     updatedAt: { type: "string", format: "date-time" },
     categories: {

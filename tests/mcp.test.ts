@@ -66,6 +66,7 @@ describe("MCP resource metadata", () => {
     expect(meta).toMatchObject({
       canonicalUrl: post.link,
       author: { name: post.author },
+      mcpResource: `stepintovision://post/${post.slug}`,
       metaUri: `stepintovision://post/${post.slug}/meta`,
       code: {
         policy: "verbatim",
@@ -91,6 +92,7 @@ describe("MCP resource metadata", () => {
     expect(metaResource._meta).toMatchObject({
       canonicalUrl: post.link,
       markdownUri: `stepintovision://post/${post.slug}`,
+      mcpResource: `stepintovision://post/${post.slug}`,
     })
   })
 
@@ -110,6 +112,7 @@ describe("MCP resource metadata", () => {
     expect(metaDocument.keywords).toEqual(
       expect.arrayContaining(["realitykit", "spatial", "model3d", "swiftui"]),
     )
+    expect(metaDocument.mcpResource).toBe(`stepintovision://post/${post.slug}`)
   })
 
   it("throws when stored digests do not match canonical output", () => {
