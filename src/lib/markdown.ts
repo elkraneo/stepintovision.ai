@@ -1,6 +1,18 @@
-import type { StepIntoVisionPost } from "./types"
+import { createHash } from "node:crypto"
 
-export function renderPostMarkdown(post: StepIntoVisionPost): string {
+import type {
+  StepIntoVisionCodeMetadata,
+  StepIntoVisionPost,
+} from "./types"
+import { canonicalizeMarkdown, extractCodeMetadata } from "./markdown-utils"
+
+export interface RenderedPostMarkdown {
+  markdown: string
+  code: StepIntoVisionCodeMetadata
+  contentDigest: string
+}
+
+export function buildRenderedPostMarkdown(post: StepIntoVisionPost): RenderedPostMarkdown {
   const lines: string[] = []
   lines.push(`# ${post.title}`)
 
@@ -25,7 +37,20 @@ export function renderPostMarkdown(post: StepIntoVisionPost): string {
     }
   }
 
-  return lines.join("\n")
+  const raw = lines.join("\n")
+  const markdown = canonicalizeMarkdown(raw)
+  const code = extractCodeMetadata(markdown)
+  const digest = createHash("sha256").update(markdown, "utf8").digest("hex")
+
+  return {
+    markdown,
+    code,
+    contentDigest: `sha256-${digest}`,
+  }
+}
+
+export function renderPostMarkdown(post: StepIntoVisionPost): string {
+  return buildRenderedPostMarkdown(post).markdown
 }
 
 function normalizeForComparison(value: string): string {

@@ -1,6 +1,9 @@
+import { createHash } from "node:crypto"
+
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { fetchWordPressPosts, normalizeWordPressPost } from "../src/lib/wordpress"
+import { renderPostMarkdown } from "../src/lib/markdown"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -159,6 +162,15 @@ describe("normalizeWordPressPost", () => {
         digest: expect.stringMatching(/^sha256-/),
       }),
     )
+
+    const rendered = renderPostMarkdown(post)
+    const lines = rendered.split("\n")
+    const firstBlock = post.code.blocks[0]
+    expect(lines[firstBlock.startLine - 1]).toMatch(/^```swift/)
+    expect(lines[firstBlock.endLine - 1]).toMatch(/^```/)
+
+    const digest = createHash("sha256").update(rendered, "utf8").digest("hex")
+    expect(post.contentDigest).toBe(`sha256-${digest}`)
   })
 
   it("labels glass background usage as Swift without mutating tokens", () => {

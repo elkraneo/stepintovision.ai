@@ -1,19 +1,17 @@
-import { createHash } from "crypto"
-
 import { htmlToText } from "html-to-text"
 import { load } from "cheerio"
 import TurndownService from "turndown"
 import { gfm } from "turndown-plugin-gfm"
 
 import type {
-  StepIntoVisionCodeBlock,
-  StepIntoVisionCodeMetadata,
   StepIntoVisionPost,
   StepIntoVisionSeeAlsoItem,
   StepIntoVisionMedia,
   StepIntoVisionLink,
   StepIntoVisionLinkRole,
 } from "./types"
+import { canonicalizeMarkdown } from "./markdown-utils"
+import { buildRenderedPostMarkdown } from "./markdown"
 
 export interface WordPressIngestOptions {
   baseUrl?: string
@@ -295,10 +293,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
       .trim(),
   )
 
-  const code = extractCodeMetadata(contentMarkdown)
-  const contentDigest = createHash("sha256").update(contentMarkdown, "utf8").digest("hex")
-
-  return {
+  const normalizedPost: StepIntoVisionPost = {
     id: post.id,
     slug: post.slug,
     title: decodeHtml(post.title.rendered).trim(),
@@ -325,13 +320,19 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     seeAlso,
     references,
     links,
-    contentDigest: `sha256-${contentDigest}`,
+    contentDigest: "",
     videoUrl,
     assetSourceUrl,
     assetAuthor,
     assetLicense,
-    code,
+    code: { policy: "verbatim", blocks: [] },
   }
+
+  const rendered = buildRenderedPostMarkdown(normalizedPost)
+  normalizedPost.code = rendered.code
+  normalizedPost.contentDigest = rendered.contentDigest
+
+  return normalizedPost
 }
 
 const HTML_ENTITY_PATTERN = /&#(x?[0-9a-fA-F]+);/g
@@ -477,18 +478,6 @@ function normalizeProseNodes($: ReturnType<typeof load>) {
   }
 }
 
-function canonicalizeMarkdown(value: string): string {
-  const normalizedLineEndings = value.replace(/\r\n/g, "\n")
-  const trimmedLines = normalizedLineEndings
-    .split("\n")
-    .map((line) => line.replace(/\s+$/g, ""))
-  let canonical = trimmedLines.join("\n").trim()
-  if (!canonical.endsWith("\n")) {
-    canonical += "\n"
-  }
-  return canonical
-}
-
 interface PreparedContent {
   html: string
   markdown: string
@@ -501,58 +490,6 @@ interface PreparedContent {
   assetSourceUrl: string | null
   assetAuthor: string | null
   assetLicense: string | null
-}
-
-function extractCodeMetadata(markdown: string): StepIntoVisionCodeMetadata {
-  const lines = markdown.split("\n")
-  const blocks: StepIntoVisionCodeBlock[] = []
-  let inside = false
-  let info = ""
-  let startLine = 0
-  let buffer: string[] = []
-
-  const pushBlock = (endLine: number) => {
-    const lang = info.split(/\s+/)[0] || "text"
-    const codeText = buffer.join("\n")
-    const digest = createHash("sha256").update(codeText, "utf8").digest("hex")
-    blocks.push({
-      id: `code-${blocks.length + 1}`,
-      lang,
-      startLine,
-      endLine,
-      digest: `sha256-${digest}`,
-    })
-  }
-
-  lines.forEach((line, index) => {
-    const lineNumber = index + 1
-    if (!inside) {
-      const match = line.match(/^```(.*)$/)
-      if (match) {
-        inside = true
-        info = match[1]?.trim() ?? ""
-        startLine = lineNumber
-        buffer = []
-      }
-      return
-    }
-
-    if (line.startsWith("```")) {
-      pushBlock(lineNumber)
-      inside = false
-      info = ""
-      buffer = []
-      startLine = 0
-      return
-    }
-
-    buffer.push(line)
-  })
-
-  return {
-    policy: "verbatim",
-    blocks,
-  }
 }
 
 function prepareContent(rawHtml: string): PreparedContent {
