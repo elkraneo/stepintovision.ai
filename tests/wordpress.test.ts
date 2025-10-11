@@ -7,7 +7,7 @@ afterEach(() => {
 })
 
 describe("normalizeWordPressPost", () => {
-  it("extracts categories, tags, and hero image", () => {
+  it("normalizes metadata, hero image, and structured content", () => {
     const rawPost = {
       id: 100,
       slug: "example",
@@ -15,10 +15,22 @@ describe("normalizeWordPressPost", () => {
       date: "2024-03-01T00:00:00",
       modified: "2024-03-02T00:00:00",
       title: { rendered: "Example &amp; Test" },
-      excerpt: { rendered: "<p>Summary with <strong>HTML</strong></p>" },
+      excerpt: { rendered: "<p>Summary with <strong>HTML</strong> that provides several ways to values convert</p>" },
       content: {
-        rendered:
-          "<p>Main content</p><script>console.log('ignored')</script><p>More content</p>",
+        rendered: `
+          <p>Main content</p>
+          <div class="wp-block-kevinbatdorf-code-block-pro" data-code-block-pro-font-family="Code-Pro">
+            <span role="button" class="code-block-pro-copy-button"></span>
+            <textarea class="code-block-pro-copy-button-textarea">struct Example: View {}</textarea>
+            <pre class="shiki light-plus"><code class="language-swift"><span class="line">struct Example: View {}</span></code></pre>
+          </div>
+          <p>See also</p>
+          <ul class="wp-block-list">
+            <li><a href="https://stepinto.vision/example-1/">Example 1</a></li>
+          </ul>
+          <figure class="wp-block-image"><img src="https://stepinto.vision/wp-content/uploads/example.jpg?resize=100" alt="Diagram" width="800" height="600" data-id="1" /></figure>
+          <script>console.log('ignored')</script>
+        `,
       },
       _embedded: {
         "wp:term": [
@@ -32,7 +44,11 @@ describe("normalizeWordPressPost", () => {
           ],
         ],
         "wp:featuredmedia": [
-          { source_url: "https://stepinto.vision/wp-content/uploads/example.jpg" },
+          {
+            source_url: "https://stepinto.vision/wp-content/uploads/example.jpg?resize=1600",
+            alt_text: "Hero diagram",
+            media_details: { width: 1600, height: 900 },
+          },
         ],
       },
     }
@@ -41,10 +57,24 @@ describe("normalizeWordPressPost", () => {
 
     expect(post.categories).toEqual(["Insights", "Spotlight"])
     expect(post.tags).toEqual(["vision", "ai"])
-    expect(post.heroImage).toMatch(/example.jpg/)
+    expect(post.heroImage).toEqual({
+      role: "hero",
+      url: "https://stepinto.vision/wp-content/uploads/example.jpg",
+      alt: "Hero diagram",
+      width: 1600,
+      height: 900,
+    })
     expect(post.title).toBe("Example & Test")
     expect(post.contentHtml).not.toContain("<script")
+    expect(post.contentMarkdown).toContain("```swift")
     expect(post.contentText).toContain("Main content")
+    expect(post.seeAlso).toEqual([
+      { title: "Example 1", url: "https://stepinto.vision/example-1/" },
+    ])
+    expect(post.locale).toBe("en")
+    expect(post.license).toBe("All rights reserved")
+    expect(post.contentDigest).toMatch(/^sha256-/)
+    expect(post.excerpt).toContain("ways to convert values")
   })
 
   it("falls back to numeric taxonomy IDs when embedded terms are absent", () => {
@@ -65,6 +95,7 @@ describe("normalizeWordPressPost", () => {
 
     expect(post.categories).toEqual(["1", "2"])
     expect(post.tags).toEqual(["3"])
+    expect(post.heroImage).toBeNull()
   })
 })
 

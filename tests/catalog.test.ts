@@ -11,6 +11,7 @@ const samplePosts: StepIntoVisionPost[] = [
     title: "Hello World",
     excerpt: "An introduction to Step Into Vision",
     contentHtml: "<p>Hello Vision</p>",
+    contentMarkdown: "Hello Vision",
     contentText: "Hello Vision",
     link: "https://stepinto.vision/hello-world",
     publishedAt: "2024-01-01T00:00:00Z",
@@ -18,6 +19,12 @@ const samplePosts: StepIntoVisionPost[] = [
     categories: ["Announcements"],
     tags: ["welcome"],
     heroImage: null,
+    locale: "en",
+    author: "Step Into Vision",
+    license: "All rights reserved",
+    version: 1,
+    seeAlso: [],
+    contentDigest: "sha256-hello",
   },
   {
     id: 2,
@@ -25,6 +32,7 @@ const samplePosts: StepIntoVisionPost[] = [
     title: "Deep Dive",
     excerpt: "A deep dive",
     contentHtml: "<p>Dive</p>",
+    contentMarkdown: "Dive",
     contentText: "Dive",
     link: "https://stepinto.vision/deep-dive",
     publishedAt: "2024-02-01T00:00:00Z",
@@ -32,6 +40,12 @@ const samplePosts: StepIntoVisionPost[] = [
     categories: ["Research"],
     tags: ["analysis"],
     heroImage: null,
+    locale: "en",
+    author: "Step Into Vision",
+    license: "All rights reserved",
+    version: 1,
+    seeAlso: [],
+    contentDigest: "sha256-dive",
   },
 ]
 
@@ -55,11 +69,12 @@ describe("catalog helpers", () => {
 
   it("renders markdown with metadata", () => {
     const markdown = renderPostMarkdown(samplePosts[0])
-    expect(markdown).toMatch(/---\ntitle: "Hello World"\n/)
-    expect(markdown).toContain('mcpResource: "stepintovision://post/hello-world"')
-    expect(markdown).toContain('aiReadableUrl: "https://stepintovision.ai/hello-world"')
+    expect(markdown).toContain("schema: mcp.post.v1")
+    expect(markdown).toContain("title: Hello World")
+    expect(markdown).toContain("mcpResource: stepintovision://post/hello-world")
+    expect(markdown).toContain("aiReadableUrl: https://stepintovision.ai/hello-world")
     expect(markdown).toContain("## At a Glance")
-    expect(markdown).toContain("- **Source:** https://stepinto.vision/hello-world")
-    expect(markdown).toContain("## Original HTML")
+    expect(markdown).toContain("- **Canonical URL:** https://stepinto.vision/hello-world")
+    expect(markdown).toContain("## Body")
   })
 })

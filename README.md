@@ -60,7 +60,8 @@ returns service metadata and available routes.
 - `GET /posts` – list paginated posts with optional `category`, `tag`, `limit`,
   and `offset` query parameters.
 - `GET /posts/:slug` – fetch a single post by slug. Request `text/markdown` to
-  receive a Markdown rendition that includes HTML source and YAML front matter.
+  receive sosumi-style Markdown with YAML front matter, normalized body
+  content, and structured metadata.
 - `GET /posts/id/:id` – fetch a post by its numeric WordPress identifier.
 - `GET /search?q=vision` – keyword search backed by Fuse.js fuzzy search.
 - `POST /mcp` (Streamable HTTP) – Model Context Protocol endpoint powering the
@@ -99,10 +100,29 @@ Available MCP tools:
 And a resource template:
 
 - `stepintovision://post/{slug}` – Provides Markdown for a specific post with
-  detailed YAML metadata and the original HTML payload. The front matter is
-  modeled after sosumi.ai with title, description, canonical source URL,
-  timestamps, word and reading-time counts, taxonomy, and MCP resource hints to
-  make the content maximally useful in downstream tools.
+  detailed YAML metadata, curated Markdown body content, and structured
+  taxonomy. The payload mirrors sosumi.ai and is designed for downstream agent
+  consumption.
+
+### Markdown front matter
+
+Every Markdown response begins with a `schema: "mcp.post.v1"` front matter
+block. Fields exposed to MCP clients include:
+
+- Identity: `id`, `slug`, `title`, `description`, `canonicalUrl`,
+  `aiReadableUrl`, `mcpResource`.
+- Provenance: `publishedAt`, `updatedAt`, `author`, `license`, `version`,
+  `contentDigest` (SHA-256).
+- Format hints: `locale`, `contentType`, `wordCount`, `tokenCount`,
+  `readingTimeSeconds`.
+- Taxonomy: `categories`, `tags`, and structured `seeAlso` entries.
+- Media: `heroImage` object with `role`, `url`, `alt`, `width`, and `height`.
+
+The Markdown body is generated from sanitized WordPress HTML and includes
+language-tagged code fences, deduplicated media references, and a `## See Also`
+section derived from related links when available. Raw HTML remains accessible
+through the MCP tool’s `structuredContent.post.contentHtml` field for agents
+that require it.
 
 ### Testing & Quality
 

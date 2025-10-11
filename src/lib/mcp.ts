@@ -5,6 +5,15 @@ import { getPostById, getPostBySlug, listPosts, searchPosts } from "./catalog"
 import { renderPostMarkdown } from "./markdown"
 import type { StepIntoVisionPost } from "./types"
 
+function buildAiReadableUrl(post: StepIntoVisionPost): string {
+  try {
+    const { pathname } = new URL(post.link)
+    return `https://stepintovision.ai${pathname}`
+  } catch {
+    return `https://stepintovision.ai/${post.slug}`
+  }
+}
+
 export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) {
   const server = new McpServer({
     name: "stepintovision.ai",
@@ -77,19 +86,22 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
                     .join("\n"),
           },
         ],
-        structuredContent: {
-          items: items.map((post) => ({
-            id: post.id,
-            slug: post.slug,
-            title: post.title,
-            excerpt: post.excerpt,
-            publishedAt: post.publishedAt,
-            updatedAt: post.updatedAt,
-            link: post.link,
-            categories: post.categories,
-            tags: post.tags,
-          })),
-        },
+          structuredContent: {
+            items: items.map((post) => ({
+              id: post.id,
+              slug: post.slug,
+              title: post.title,
+              excerpt: post.excerpt,
+              publishedAt: post.publishedAt,
+              updatedAt: post.updatedAt,
+              link: post.link,
+              aiReadableUrl: buildAiReadableUrl(post),
+              mcpResource: `stepintovision://post/${post.slug}`,
+              categories: post.categories,
+              tags: post.tags,
+              contentDigest: post.contentDigest,
+            })),
+          },
       }
     },
   )
@@ -149,7 +161,7 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
 
       if (includeText) {
         sections.push("")
-        sections.push(post.contentText)
+        sections.push(post.contentMarkdown)
       }
 
       if (includeHtml) {
@@ -166,22 +178,31 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
             text: sections.join("\n"),
           },
         ],
-        structuredContent: {
-          post: {
-            id: post.id,
-            slug: post.slug,
-            title: post.title,
-            excerpt: post.excerpt,
-            link: post.link,
-            publishedAt: post.publishedAt,
-            updatedAt: post.updatedAt,
-            categories: post.categories,
-            tags: post.tags,
-            heroImage: post.heroImage ?? undefined,
-            contentHtml: includeHtml ? post.contentHtml : undefined,
-            contentText: includeText ? post.contentText : undefined,
+          structuredContent: {
+            post: {
+              id: post.id,
+              slug: post.slug,
+              title: post.title,
+              excerpt: post.excerpt,
+              link: post.link,
+              aiReadableUrl: buildAiReadableUrl(post),
+              mcpResource: `stepintovision://post/${post.slug}`,
+              publishedAt: post.publishedAt,
+              updatedAt: post.updatedAt,
+              categories: post.categories,
+              tags: post.tags,
+              heroImage: post.heroImage ?? undefined,
+              seeAlso: post.seeAlso,
+              locale: post.locale,
+              author: post.author,
+              license: post.license,
+              version: post.version,
+              contentDigest: post.contentDigest,
+              contentMarkdown: includeText ? post.contentMarkdown : undefined,
+              contentText: includeText ? post.contentText : undefined,
+              contentHtml: includeHtml ? post.contentHtml : undefined,
+            },
           },
-        },
       }
     },
   )

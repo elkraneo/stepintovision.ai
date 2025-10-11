@@ -1,16 +1,36 @@
+export interface StepIntoVisionMedia {
+  role: "hero"
+  url: string
+  alt?: string | null
+  width?: number | null
+  height?: number | null
+}
+
+export interface StepIntoVisionSeeAlsoItem {
+  title: string
+  url: string
+}
+
 export interface StepIntoVisionPost {
   id: number
   slug: string
   title: string
   excerpt: string
   contentHtml: string
+  contentMarkdown: string
   contentText: string
   publishedAt: string
   updatedAt: string
   link: string
   categories: string[]
   tags: string[]
-  heroImage?: string | null
+  heroImage?: StepIntoVisionMedia | null
+  locale: string
+  author: string
+  license: string
+  version: number
+  seeAlso: StepIntoVisionSeeAlsoItem[]
+  contentDigest: string
 }
 
 export interface CatalogMetadata {

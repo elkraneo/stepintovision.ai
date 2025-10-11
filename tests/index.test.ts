@@ -23,6 +23,7 @@ beforeAll(async () => {
         title: "RealityKit Basics: Coordinate Space Conversion",
         excerpt: "Convert between world, view, and anchor spaces in RealityKit.",
         contentHtml: "<p>Example HTML</p>",
+        contentMarkdown: "Example HTML",
         contentText: "Example HTML",
         link: "https://stepinto.vision/example-code/realitykit-basics-coordinate-space-conversion/",
         publishedAt: "2024-04-20T12:00:00Z",
@@ -30,6 +31,12 @@ beforeAll(async () => {
         categories: ["Example Code"],
         tags: ["RealityKit"],
         heroImage: null,
+        locale: "en",
+        author: "Step Into Vision",
+        license: "All rights reserved",
+        version: 1,
+        seeAlso: [],
+        contentDigest: "sha256-test",
       },
     ],
   }
@@ -56,7 +63,10 @@ describe("ai-readable routing", () => {
     expect(response.headers.get("Content-Type")).toContain("text/markdown")
     const body = await response.text()
     expect(body).toContain("RealityKit Basics: Coordinate Space Conversion")
-    expect(body).toContain("aiReadableUrl: \"https://stepintovision.ai/example-code/realitykit-basics-coordinate-space-conversion\"")
+    expect(body).toContain("schema: mcp.post.v1")
+    expect(body).toContain("canonicalUrl: https://stepinto.vision/example-code/realitykit-basics-coordinate-space-conversion/")
+    expect(body).toContain("aiReadableUrl: https://stepintovision.ai/example-code/realitykit-basics-coordinate-space-conversion")
+    expect(body).toContain("contentDigest: sha256-test")
   })
 
   it("supports the /mcp prefix for local workers", async () => {

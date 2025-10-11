@@ -20,13 +20,18 @@
     "@hono/mcp": "^0.1.4",
     "@hono/node-server": "^1.12.5",
     "@modelcontextprotocol/sdk": "^1.20.0",
+    "cheerio": "^1.0.0",
     "fuse.js": "^7.0.0",
     "hono": "^4.6.7",
     "html-to-text": "^9.0.5",
+    "turndown": "^7.2.0",
+    "turndown-plugin-gfm": "^1.0.2",
+    "yaml": "^2.6.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.3",
+    "@types/turndown": "^5.0.5",
     "@types/node": "^22.10.1",
     "tsx": "^4.19.2",
     "typescript": "^5.5.4",

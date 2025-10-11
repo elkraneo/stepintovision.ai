@@ -1,6 +1,15 @@
-import { htmlToText } from "html-to-text"
+import { createHash } from "crypto"
 
-import type { StepIntoVisionPost } from "./types"
+import { htmlToText } from "html-to-text"
+import { load } from "cheerio"
+import TurndownService from "turndown"
+import { gfm } from "turndown-plugin-gfm"
+
+import type {
+  StepIntoVisionPost,
+  StepIntoVisionSeeAlsoItem,
+  StepIntoVisionMedia,
+} from "./types"
 
 export interface WordPressIngestOptions {
   baseUrl?: string
@@ -23,8 +32,15 @@ interface WordPressEmbeddedTerm {
   taxonomy: string
 }
 
+interface WordPressMediaDetails {
+  width?: number
+  height?: number
+}
+
 interface WordPressMedia {
   source_url?: string
+  alt_text?: string
+  media_details?: WordPressMediaDetails
 }
 
 interface WordPressPost {
@@ -45,6 +61,15 @@ interface WordPressPost {
 
 const DEFAULT_BASE_URL = "https://stepinto.vision"
 const USER_AGENT = "stepinto-vision-ingest/1.0 (+https://stepinto.vision)"
+const DEFAULT_LOCALE = "en"
+const DEFAULT_LICENSE = "All rights reserved"
+const DEFAULT_AUTHOR = "Step Into Vision"
+
+const turndown = new TurndownService({
+  codeBlockStyle: "fenced",
+  headingStyle: "atx",
+})
+turndown.use(gfm)
 
 function buildWordPressPostsUrl(baseUrl: string): URL {
   const trimmed = baseUrl.trim()
@@ -159,24 +184,25 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
   const tags: string[] = []
 
   for (const group of terms) {
-    if (!Array.isArray(group) || group.length === 0) {
+    if (!Array.isArray(group)) {
       continue
     }
 
-    const taxonomy = group[0]?.taxonomy
-    if (taxonomy === "category") {
-      for (const term of group) {
-        if (term?.name) {
-          categories.push(term.name)
-        }
+    for (const term of group) {
+      if (!term) {
+        continue
       }
-    }
 
-    if (taxonomy === "post_tag") {
-      for (const term of group) {
-        if (term?.name) {
-          tags.push(term.name)
-        }
+      const name = term.name?.trim()
+      if (!name) {
+        continue
+      }
+
+      const taxonomy = term.taxonomy ?? inferTaxonomyFromLink(term.link)
+      if (taxonomy === "category") {
+        categories.push(name)
+      } else if (taxonomy === "post_tag") {
+        tags.push(name)
       }
     }
   }
@@ -200,36 +226,47 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
   const mediaGroups = Array.isArray(post._embedded?.["wp:featuredmedia"])
     ? (post._embedded?.["wp:featuredmedia"] as WordPressMedia[])
     : []
-  const heroImage = mediaGroups[0]?.source_url ?? null
+  const heroImage = normalizeHeroImage(mediaGroups[0])
 
-  const contentHtml = sanitizeHtml(post.content.rendered)
+  const prepared = prepareContent(post.content.rendered)
+  const contentHtml = prepared.html
+  const contentMarkdown = prepared.markdown
+  const contentText = prepared.text
+  const seeAlso = prepared.seeAlso
+
   const excerptHtml = sanitizeHtml(post.excerpt.rendered)
-  const contentText = htmlToText(contentHtml, {
-    wordwrap: false,
-    selectors: [
-      { selector: "a", options: { ignoreHref: true } },
-      { selector: "img", format: "skip" },
-    ],
-    preserveNewlines: true,
-  }).trim()
+  const excerpt = fixCommonGrammar(
+    htmlToText(excerptHtml, {
+      wordwrap: false,
+      selectors: [{ selector: "a", options: { ignoreHref: true } }],
+      preserveNewlines: false,
+    })
+      .replace(/\s+/g, " ")
+      .trim(),
+  )
+
+  const contentDigest = createHash("sha256").update(contentMarkdown, "utf8").digest("hex")
 
   return {
     id: post.id,
     slug: post.slug,
     title: decodeHtml(post.title.rendered).trim(),
-    excerpt: htmlToText(excerptHtml, {
-      wordwrap: false,
-      selectors: [{ selector: "a", options: { ignoreHref: true } }],
-      preserveNewlines: false,
-    }).replace(/\s+/g, " ").trim(),
+    excerpt,
     contentHtml,
+    contentMarkdown,
     contentText,
     link: post.link,
     publishedAt: post.date,
     updatedAt: post.modified,
-    categories: Array.from(new Set(categories)),
-    tags: Array.from(new Set(tags)),
+    categories: dedupeStrings(categories),
+    tags: dedupeStrings(tags),
     heroImage,
+    locale: DEFAULT_LOCALE,
+    author: DEFAULT_AUTHOR,
+    license: DEFAULT_LICENSE,
+    version: 1,
+    seeAlso,
+    contentDigest: `sha256-${contentDigest}`,
   }
 }
 
@@ -264,4 +301,243 @@ const SCRIPT_STYLE_PATTERN = /<(script|style)[^>]*>[\s\S]*?<\/\1>/gi
 
 function sanitizeHtml(input: string): string {
   return input.replace(SCRIPT_STYLE_PATTERN, "")
+}
+
+function inferTaxonomyFromLink(link: string): string | null {
+  if (!link) {
+    return null
+  }
+
+  if (link.includes("/category/")) {
+    return "category"
+  }
+  if (link.includes("/tag/")) {
+    return "post_tag"
+  }
+  return null
+}
+
+function dedupeStrings(values: string[]): string[] {
+  const seen = new Set<string>()
+  for (const value of values) {
+    if (value) {
+      seen.add(value)
+    }
+  }
+  return Array.from(seen)
+}
+
+function cleanUrl(url: string | undefined): string | undefined {
+  if (!url) {
+    return undefined
+  }
+
+  try {
+    const parsed = new URL(url)
+    parsed.search = ""
+    parsed.hash = ""
+    return parsed.toString()
+  } catch {
+    return url
+  }
+}
+
+function normalizeHeroImage(media?: WordPressMedia): StepIntoVisionMedia | null {
+  if (!media?.source_url) {
+    return null
+  }
+
+  return {
+    role: "hero",
+    url: cleanUrl(media.source_url) ?? media.source_url,
+    alt: media.alt_text ?? null,
+    width: media.media_details?.width ?? null,
+    height: media.media_details?.height ?? null,
+  }
+}
+
+function fixCommonGrammar(value: string): string {
+  return value.replace(/ways to values convert/gi, "ways to convert values")
+}
+
+interface PreparedContent {
+  html: string
+  markdown: string
+  text: string
+  seeAlso: StepIntoVisionSeeAlsoItem[]
+}
+
+function prepareContent(rawHtml: string): PreparedContent {
+  const $ = load(rawHtml)
+
+  $("script, style").remove()
+  $("span.code-block-pro-copy-button").remove()
+
+  const seeAlsoItems: StepIntoVisionSeeAlsoItem[] = []
+
+  $("p").each((_, element) => {
+    const text = $(element).text().trim().toLowerCase()
+    if (text === "see also") {
+      const list = $(element).nextAll("ul").first()
+      if (list.length > 0) {
+        list.find("a").each((__, anchor) => {
+          const title = $(anchor).text().trim()
+          const url = $(anchor).attr("href")?.trim()
+          if (title && url) {
+            seeAlsoItems.push({ title, url })
+          }
+        })
+        list.remove()
+      }
+      $(element).remove()
+    }
+  })
+
+  $("[style]").removeAttr("style")
+  $("[class]").each((_, element) => {
+    const el = element as unknown as { attribs?: Record<string, string> }
+    if (!el.attribs) {
+      return
+    }
+
+    const value = el.attribs.class
+    if (!value) {
+      $(element).removeAttr("class")
+      return
+    }
+
+    if (value.includes("language-")) {
+      // Preserve language hint
+      return
+    }
+
+    $(element).removeAttr("class")
+  })
+
+  $("*[data-attachment-id], *[data-permalink], *[data-orig-file], *[data-orig-size], *[data-comments-opened], *[data-image-meta], *[data-image-title], *[data-image-description], *[data-image-caption], *[data-medium-file], *[data-large-file], *[data-recalc-dims], *[data-id], *[data-type]").each((_, element) => {
+    const attribs = (element as unknown as { attribs?: Record<string, string> }).attribs
+    if (!attribs) {
+      return
+    }
+    for (const key of Object.keys(attribs)) {
+      if (key.startsWith("data-")) {
+        $(element).removeAttr(key)
+      }
+    }
+  })
+
+  $("figure img").each((_, element) => {
+    const src = $(element).attr("src")
+    const alt = $(element).attr("alt") ?? null
+    const width = $(element).attr("width") ?? null
+    const height = $(element).attr("height") ?? null
+
+    const cleanSrc = cleanUrl(src ?? undefined)
+    if (cleanSrc) {
+      $(element).attr("src", cleanSrc)
+    }
+
+    if (alt === "") {
+      $(element).attr("alt", "")
+    }
+
+    if (width) {
+      $(element).attr("width", width)
+    }
+    if (height) {
+      $(element).attr("height", height)
+    }
+  })
+
+  $("div.wp-block-kevinbatdorf-code-block-pro").each((_, element) => {
+    const textarea = $(element).find("textarea").first()
+    let codeText = textarea.text().replace(/\r\n/g, "\n").trim()
+    if (!codeText) {
+      const codeElement = $(element).find("pre code").first()
+      codeText = codeElement.text().replace(/\r\n/g, "\n").trim()
+    }
+    if (!codeText) {
+      $(element).remove()
+      return
+    }
+    let language = inferCodeLanguage(codeText)
+    if (!language) {
+      const codeElement = $(element).find("code").first()
+      const classAttr = codeElement.attr("class") ?? ""
+      const match = classAttr.match(/language-([a-z0-9]+)/i)
+      if (match) {
+        language = match[1]
+      }
+    }
+
+    const replacement = `<pre><code class="language-${language ?? "text"}">${escapeHtml(codeText)}</code></pre>`
+    $(element).replaceWith(replacement)
+  })
+
+  const cleanedHtml = fixCommonGrammar($.root().html()?.trim() ?? "")
+
+  const markdown = turndown.turndown(cleanedHtml)
+  const normalizedMarkdown = fixCommonGrammar(markdown.trim())
+
+  const text = fixCommonGrammar(
+    htmlToText(cleanedHtml, {
+      wordwrap: false,
+      selectors: [
+        { selector: "a", options: { ignoreHref: true } },
+        { selector: "img", format: "skip" },
+      ],
+      preserveNewlines: true,
+    })
+      .replace(/\s+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim(),
+  )
+
+  return {
+    html: cleanedHtml,
+    markdown: normalizedMarkdown,
+    text,
+    seeAlso: dedupeSeeAlso(seeAlsoItems),
+  }
+}
+
+function inferCodeLanguage(code: string): string | null {
+  const trimmed = code.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  if (/\bimport\s+(SwiftUI|RealityKit|RealityKitContent)/.test(trimmed)) {
+    return "swift"
+  }
+  if (/\bstruct\s+[A-Z]/.test(trimmed) && trimmed.includes(": View")) {
+    return "swift"
+  }
+  if (/\bfunc\s+[a-zA-Z0-9_]+\s*\(/.test(trimmed) && trimmed.includes("->")) {
+    return "swift"
+  }
+  if (/class\s+[A-Z]/.test(trimmed) && trimmed.includes("NSObject")) {
+    return "swift"
+  }
+  return null
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+}
+
+function dedupeSeeAlso(items: StepIntoVisionSeeAlsoItem[]): StepIntoVisionSeeAlsoItem[] {
+  const seen = new Set<string>()
+  const result: StepIntoVisionSeeAlsoItem[] = []
+  for (const item of items) {
+    const key = `${item.title}|${item.url}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      result.push(item)
+    }
+  }
+  return result
 }
