@@ -1,5 +1,6 @@
 import { htmlToText } from "html-to-text"
 import { load } from "cheerio"
+import type { Element } from "cheerio"
 import TurndownService from "turndown"
 import { gfm } from "turndown-plugin-gfm"
 
@@ -309,15 +310,18 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
   const readingTimeSeconds = Math.max(30, Math.round((wordCount / 200) * 60))
 
   const excerptHtml = sanitizeHtml(post.excerpt.rendered)
-  const excerpt = applyGrammarFixesToProse(
-    htmlToText(excerptHtml, {
-      wordwrap: false,
-      selectors: [{ selector: "a", options: { ignoreHref: true } }],
-      preserveNewlines: false,
-    })
-      .replace(/\s+/g, " ")
-      .trim(),
-  )
+  const rawExcerpt = htmlToText(excerptHtml, {
+    wordwrap: false,
+    selectors: [{ selector: "a", options: { ignoreHref: true } }],
+    preserveNewlines: false,
+  })
+    .replace(/\s+/g, " ")
+    .trim()
+  const excerpt = applyGrammarFixesToProse(rawExcerpt)
+  const excerptChanged = excerpt !== rawExcerpt
+
+  const normalized = prepared.proseNormalized || excerptChanged
+  const normalizedScope = normalized ? "prose" : "none"
 
   const normalizedPost: StepIntoVisionPost = {
     id: post.id,
@@ -341,9 +345,9 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     author: authorName,
     license: DEFAULT_LICENSE,
     version: 1,
-    normalized: true,
+    normalized,
     verbatim: false,
-    normalizedScope: "prose",
+    normalizedScope,
     seeAlso,
     references,
     links,
@@ -477,6 +481,9 @@ function applyGrammarFixesToProse(value: string): string {
     .replace(/\bThis use\b/gi, (match) =>
       match[0] === "T" ? "This uses" : "this uses",
     )
+    .replace(/\bI suggest you this article first\b/gi, (match) =>
+      match[0] === "I" ? "Read this article first" : "read this article first",
+    )
     .replace(/using\s+spatialOverlay\s+wrap/gi, (match) =>
       match[0] === "U"
         ? "Using .spatialOverlay, wrap"
@@ -516,6 +523,7 @@ interface PreparedContent {
   assetAuthor: string | null
   assetLicense: string | null
   status: StepIntoVisionStatus | null
+  proseNormalized: boolean
 }
 
 function prepareContent(rawHtml: string, context: PrepareContentContext = {}): PreparedContent {
@@ -680,7 +688,9 @@ function prepareContent(rawHtml: string, context: PrepareContentContext = {}): P
 
   const developerLinks = collectDeveloperLinks($)
   const assetData = collectAssetMetadata($)
-  const videoUrl = collectVideoUrl($)
+  const videoDetails = collectVideoDetails($)
+  const videoUrl = videoDetails.url
+  const videoTitle = videoDetails.title
 
   const status = extractStatus($, context)
 
@@ -688,14 +698,19 @@ function prepareContent(rawHtml: string, context: PrepareContentContext = {}): P
 
   let markdown = turndown.turndown(cleanedHtml).trim()
   markdown = canonicalizeMarkdown(markdown)
-  markdown = normalizeMarkdownProse(markdown, applyGrammarFixesToProse)
+  const normalizedMarkdown = normalizeMarkdownProse(markdown, applyGrammarFixesToProse)
+  markdown = normalizedMarkdown.markdown
   markdown = ensureCodeFenceLanguages(markdown)
   markdown = canonicalizeMarkdown(markdown)
   const analysis = analyzeMarkdown(markdown)
 
   const baseReferences = collectReferenceLinks($)
   const references = augmentReferencesWithApiMentions(baseReferences, markdown)
-  const links = filterLinksAgainstReferences(developerLinks, references)
+  let links = filterLinksAgainstReferences(developerLinks, references)
+
+  if (videoUrl) {
+    links = dedupeLinks([...links, buildVideoLink(videoUrl, videoTitle)])
+  }
 
   return {
     html: cleanedHtml,
@@ -711,6 +726,7 @@ function prepareContent(rawHtml: string, context: PrepareContentContext = {}): P
     assetAuthor: assetData.assetAuthor,
     assetLicense: assetData.assetLicense,
     status,
+    proseNormalized: normalizedMarkdown.changed,
   }
 }
 
@@ -778,7 +794,8 @@ function collectReferenceLinks($: ReturnType<typeof load>): StepIntoVisionSeeAls
       return
     }
 
-    const title = $(element).text().trim() || normalizedHref
+    const rawTitle = $(element).text().trim()
+    const title = deriveReferenceTitle($, element as Element, normalizedHref, rawTitle)
     const linkRole = determineLinkRole(hostname, normalizedHref)
 
     if (linkRole === "repo" || linkRole === "download" || linkRole === "series" || linkRole === "asset" || linkRole === "video") {
@@ -802,6 +819,118 @@ function collectReferenceLinks($: ReturnType<typeof load>): StepIntoVisionSeeAls
   })
 
   return dedupeSeeAlso(links)
+}
+
+const GENERIC_REFERENCE_TITLE_PATTERNS = [
+  /^article$/i,
+  /^this\s+article$/i,
+  /^this\s+article\s+first$/i,
+  /^article\s+first$/i,
+  /^this\s+write-?up$/i,
+  /^write-?up$/i,
+  /^this\s+post$/i,
+  /^the\s+article$/i,
+  /^original\s+article$/i,
+]
+
+const POSSESSIVE_PREFIX_STOPWORDS = new Set(["see", "read", "watch", "check"])
+
+function deriveReferenceTitle(
+  $: ReturnType<typeof load>,
+  element: Element,
+  url: string,
+  rawTitle: string,
+): string {
+  const trimmed = rawTitle.trim()
+  const slugTitle = titleFromUrl(url)
+  const possessor = extractPossessiveName($, element)
+  const needsSlug = !trimmed || isGenericReferenceTitle(trimmed)
+
+  let title = needsSlug ? slugTitle ?? trimmed ?? url : trimmed
+
+  if (possessor) {
+    const lowerTitle = title.toLowerCase()
+    if (!lowerTitle.includes(possessor.toLowerCase())) {
+      title = `${title} (${possessor})`
+    }
+  }
+
+  return title?.trim() || slugTitle || url
+}
+
+function isGenericReferenceTitle(value: string): boolean {
+  const lower = value.trim().toLowerCase()
+  if (!lower) {
+    return true
+  }
+  return GENERIC_REFERENCE_TITLE_PATTERNS.some((pattern) => pattern.test(lower))
+}
+
+function titleFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    const segments = parsed.pathname.split("/").filter(Boolean)
+    if (segments.length === 0) {
+      return null
+    }
+    let last = segments[segments.length - 1] ?? ""
+    if (!last && segments.length > 1) {
+      last = segments[segments.length - 2] ?? ""
+    }
+    if (!last) {
+      return null
+    }
+    const withoutExt = last.replace(/\.[a-z0-9]+$/i, "")
+    const decoded = decodeURIComponent(withoutExt)
+    const normalized = decoded.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim()
+    if (!normalized) {
+      return null
+    }
+    return normalized
+      .split(" ")
+      .map((word) => {
+        if (!word) {
+          return word
+        }
+        if (/^[A-Z0-9]+$/.test(word)) {
+          return word.toUpperCase()
+        }
+        return word[0].toUpperCase() + word.slice(1)
+      })
+      .join(" ")
+  } catch {
+    return null
+  }
+}
+
+function extractPossessiveName(
+  $: ReturnType<typeof load>,
+  element: Element,
+): string | null {
+  const parent = element.parent
+  if (!parent) {
+    return null
+  }
+  const parentText = $(parent).text()
+  const anchorText = $(element).text()
+  const index = parentText.indexOf(anchorText)
+  if (index <= 0) {
+    return null
+  }
+  const before = parentText.slice(0, index).trimEnd()
+  const match = before.match(/([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*)'s$/)
+  if (!match) {
+    return null
+  }
+  const parts = match[1]?.trim().split(/\s+/) ?? []
+  while (parts.length > 1 && POSSESSIVE_PREFIX_STOPWORDS.has(parts[0].toLowerCase())) {
+    parts.shift()
+  }
+  const candidate = parts.join(" ").trim()
+  if (candidate) {
+    return candidate
+  }
+  return match[1]?.trim() ?? null
 }
 
 function augmentReferencesWithApiMentions(
@@ -880,6 +1009,31 @@ function filterLinksAgainstReferences(
   })
 }
 
+function buildVideoLink(url: string, title?: string | null): StepIntoVisionLink {
+  let hostname: string | null = null
+  try {
+    hostname = new URL(url).hostname.toLowerCase()
+  } catch {
+    hostname = null
+  }
+
+  const resolvedRole = hostname ? determineLinkRole(hostname, url) ?? "video" : "video"
+  const sourceType = hostname && isInternalHost(hostname) ? "firstParty" : "thirdParty"
+  const entry: StepIntoVisionLink = {
+    role: resolvedRole === "video" ? "video" : resolvedRole,
+    url,
+    sourceType: sourceType ?? "thirdParty",
+    rel: "supporting",
+  }
+
+  const label = title?.trim() || "Video demo"
+  if (label) {
+    entry.title = label
+  }
+
+  return entry
+}
+
 function parseDimension(value: string): number | null {
   const numeric = Number.parseInt(value, 10)
   return Number.isNaN(numeric) ? null : numeric
@@ -903,7 +1057,11 @@ function determineLinkRole(
   if (lowerHost.includes("developer.apple.com")) {
     return "docs"
   }
-  if (lowerHost.includes("youtube.com") || lowerHost.includes("youtu.be")) {
+  if (
+    lowerHost.includes("youtube.com") ||
+    lowerHost.includes("youtu.be") ||
+    lowerHost.includes("vimeo.com")
+  ) {
     return "video"
   }
   if (lowerHost.includes("opengameart.org")) {
@@ -1111,17 +1269,22 @@ function collectAssetMetadata($: ReturnType<typeof load>): AssetMetadata {
   return { assetSourceUrl, assetAuthor, assetLicense }
 }
 
-function collectVideoUrl($: ReturnType<typeof load>): string | null {
+function collectVideoDetails($: ReturnType<typeof load>): { url: string | null; title: string | null } {
   const iframe = $("iframe[src]").first()
   if (iframe.length === 0) {
-    return null
+    return { url: null, title: null }
   }
   const src = iframe.attr("src")?.trim()
   if (!src) {
-    return null
+    return { url: null, title: null }
   }
-  const normalized = cleanUrl(src)
-  return normalized ?? src
+  const normalized = cleanUrl(src) ?? src
+  let title = iframe.attr("title")?.trim() ?? null
+  if (!title) {
+    const figureCaption = iframe.closest("figure").find("figcaption").first().text().trim()
+    title = figureCaption || null
+  }
+  return { url: normalized, title }
 }
 
 function extractAuthorName(post: WordPressPost): string {

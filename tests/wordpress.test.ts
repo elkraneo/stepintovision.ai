@@ -113,6 +113,13 @@ describe("normalizeWordPressPost", () => {
         sourceType: "thirdParty",
         rel: "supporting",
       },
+      {
+        role: "video",
+        url: "https://player.vimeo.com/video/example",
+        title: "Video demo",
+        sourceType: "thirdParty",
+        rel: "supporting",
+      },
     ])
     expect(post.status).toBeNull()
     expect(post.references).toEqual([
@@ -161,8 +168,8 @@ describe("normalizeWordPressPost", () => {
     expect(post.assetLicense).toBe("CC0")
     expect(post.videoUrl).toBe("https://player.vimeo.com/video/example")
     expect(post.normalized).toBe(true)
-    expect(post.verbatim).toBe(false)
     expect(post.normalizedScope).toBe("prose")
+    expect(post.verbatim).toBe(false)
     expect(post.contentMarkdown).not.toContain("xtension")
     expect(post.code.policy).toBe("verbatim")
     expect(post.code.blocks.length).toBeGreaterThan(0)
@@ -242,7 +249,8 @@ glassBackgroundBox(padding: 12, .all)</code></pre>
     expect(post.tags).toEqual(["3"])
     expect(post.heroImage).toBeNull()
     expect(post.author).toBe("Step Into Vision")
-    expect(post.normalized).toBe(true)
+    expect(post.normalized).toBe(false)
+    expect(post.normalizedScope).toBe("none")
     expect(post.verbatim).toBe(false)
     expect(post.code.policy).toBe("verbatim")
     expect(post.code.blocks).toHaveLength(0)
@@ -325,7 +333,7 @@ glassBackgroundBox(padding: 12, .all)</code></pre>
     const post = normalizeWordPressPost(rawPost as never)
 
     expect(post.references).toContainEqual({
-      title: "Volume Window Zoom",
+      title: "Volume Window Zoom (Drew Olbrich)",
       url: "https://www.lunarskydiving.com/blog/volume-window-zoom/",
       role: "article",
       sourceType: "thirdParty",

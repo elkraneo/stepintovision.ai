@@ -29,6 +29,7 @@ const STOPWORDS = new Set([
   "your",
   "about",
   "when",
+  "how",
   "were",
   "while",
   "their",
@@ -51,6 +52,8 @@ const STOPWORDS = new Set([
   "onto",
   "into",
   "through",
+  "first",
+  "move",
 ])
 
 const KEYWORD_SHORT_ALLOW = new Set(["3d", "ar", "vr", "ai", "usd", "usdz", "usdc", "usda"])
@@ -156,19 +159,23 @@ export function ensureCodeFenceLanguages(markdown: string): string {
     }
 
     const newInfo = remainder ? `${detected} ${remainder}` : detected
-    result[fenceIndex] = "```" + newInfo
+    const original = result[fenceIndex]
+    const trimmed = original.trimStart()
+    const indent = original.slice(0, original.length - trimmed.length)
+    result[fenceIndex] = indent + "```" + newInfo
   }
 
   lines.forEach((line, index) => {
-    if (line.startsWith("```") && !inside) {
+    const trimmed = line.trimStart()
+    if (trimmed.startsWith("```") && !inside) {
       inside = true
       fenceIndex = index
-      info = line.slice(3)
+      info = trimmed.slice(3)
       buffer = []
       return
     }
 
-    if (line.startsWith("```") && inside) {
+    if (trimmed.startsWith("```") && inside) {
       updateFence()
       inside = false
       fenceIndex = -1
@@ -178,7 +185,7 @@ export function ensureCodeFenceLanguages(markdown: string): string {
     }
 
     if (inside) {
-      buffer.push(line)
+      buffer.push(trimmed)
     }
   })
 
@@ -189,12 +196,18 @@ export function ensureCodeFenceLanguages(markdown: string): string {
   return canonical
 }
 
+export interface NormalizedMarkdownResult {
+  markdown: string
+  changed: boolean
+}
+
 export function normalizeMarkdownProse(
   markdown: string,
   transform: (value: string) => string,
-): string {
+): NormalizedMarkdownResult {
   const parser = createParser()
   const tree = parser.parse(markdown) as Root
+  let changed = false
 
   visit(tree, "text", (node, _index, parent) => {
     if (!isProseParent(parent)) {
@@ -203,12 +216,16 @@ export function normalizeMarkdownProse(
     const next = transform(node.value)
     if (next !== node.value) {
       node.value = next
+      changed = true
     }
   })
 
   const stringifier = createStringifier()
   const rendered = stringifier.stringify(tree) as string
-  return canonicalizeMarkdown(rendered)
+  return {
+    markdown: canonicalizeMarkdown(rendered),
+    changed,
+  }
 }
 
 function extractCodeMetadataFromTree(root: Root): StepIntoVisionCodeMetadata {
