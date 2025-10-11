@@ -143,6 +143,40 @@ describe("normalizeWordPressPost", () => {
     expect(post.contentMarkdown).not.toContain("xtension")
   })
 
+  it("labels glass background usage as Swift and normalizes Edge3D sets", () => {
+    const rawPost = {
+      id: 300,
+      slug: "glass-background",
+      link: "https://stepinto.vision/glass-background",
+      date: "2025-01-01T00:00:00",
+      modified: "2025-01-02T00:00:00",
+      title: { rendered: "Glass Background" },
+      excerpt: { rendered: "<p>Summary</p>" },
+      content: {
+        rendered: `
+          <p>This will let me do things like this.</p>
+          <pre class="wp-block-code"><code>glassBackgroundBox(padding: 12, .top, .bottom)
+glassBackgroundBox(padding: 12, .vertical)
+glassBackgroundBox(padding: 12, .all)</code></pre>
+        `,
+      },
+    }
+
+    const post = normalizeWordPressPost(rawPost as never)
+
+    expect(post.contentMarkdown).toContain("```swift")
+    expect(post.contentMarkdown).toContain(
+      ".glassBackgroundBox(padding: 12, [.top, .bottom])",
+    )
+    expect(post.contentMarkdown).toContain(
+      ".glassBackgroundBox(padding: 12, .vertical)",
+    )
+    expect(post.contentMarkdown).toContain(".glassBackgroundBox(padding: 12, .all)")
+    expect(post.contentMarkdown).not.toMatch(
+      /glassBackgroundBox\(padding:\s*12,\s*\.top,\s*\.bottom\)/,
+    )
+  })
+
   it("falls back to numeric taxonomy IDs when embedded terms are absent", () => {
     const rawPost = {
       id: 200,

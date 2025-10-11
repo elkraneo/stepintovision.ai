@@ -470,11 +470,43 @@ function prepareContent(rawHtml: string): PreparedContent {
     }
 
     if (language === "swift") {
+      codeText = normalizeSwiftCode(codeText)
       codeText = ensureSwiftImports(codeText)
     }
 
     const replacement = `<pre><code class="language-${language ?? "text"}">${escapeHtml(codeText)}</code></pre>`
     $(element).replaceWith(replacement)
+  })
+
+  $("pre code").each((_, element) => {
+    let codeText = $(element).text().replace(/\r\n/g, "\n").trim()
+    if (!codeText) {
+      $(element).parent("pre").remove()
+      return
+    }
+
+    codeText = fixCommonGrammar(codeText)
+    let language = inferCodeLanguage(codeText)
+    if (!language) {
+      const classAttr = $(element).attr("class") ?? ""
+      const match = classAttr.match(/language-([a-z0-9]+)/i)
+      if (match) {
+        language = match[1].toLowerCase()
+      }
+    }
+
+    if (language === "swift") {
+      codeText = normalizeSwiftCode(codeText)
+      codeText = ensureSwiftImports(codeText)
+    }
+
+    $(element).text(codeText)
+
+    if (language) {
+      $(element).attr("class", `language-${language}`)
+    } else {
+      $(element).removeAttr("class")
+    }
   })
 
   $("[class]").each((_, element) => {
@@ -626,6 +658,7 @@ function inferCodeLanguage(code: string): string | null {
   const swiftMarkers = [
     "spatialOverlay",
     "glassBackgroundDisplayMode",
+    "glassBackgroundBox",
     "Edge3D.",
     "rotation3DLayout",
     "ModelViewSimple",
@@ -671,6 +704,21 @@ function ensureSwiftImports(code: string): string {
   }
 
   return `${imports.join("\n")}\n\n${result}`
+}
+
+function normalizeSwiftCode(code: string): string {
+  let result = code
+
+  result = result.replace(/(^|\n)(\s*)glassBackgroundBox\s*\(/g, (_, prefix, indent) => {
+    return `${prefix}${indent}.glassBackgroundBox(`
+  })
+
+  result = result.replace(
+    /\.glassBackgroundBox\(\s*padding:\s*([^,]+),\s*\.top\s*,\s*\.bottom\s*\)/g,
+    (_, padding) => `.glassBackgroundBox(padding: ${padding.trim()}, [.top, .bottom])`,
+  )
+
+  return result
 }
 
 function collectReferenceLinks($: ReturnType<typeof load>): StepIntoVisionSeeAlsoItem[] {
