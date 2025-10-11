@@ -72,6 +72,8 @@ describe("MCP resource metadata", () => {
       },
       normalizedScope: "prose",
     })
+    expect(Array.isArray(meta.keywords)).toBe(true)
+    expect(meta.keywords).toContain("Example Code")
     const codeMeta = (meta.code ?? {}) as { blocks?: unknown[] }
     expect(Array.isArray(codeMeta.blocks)).toBe(true)
     expect(codeMeta.blocks?.length ?? 0).toBeGreaterThan(0)
@@ -103,6 +105,7 @@ describe("MCP resource metadata", () => {
     expect(metaDocument.code.blocks.length).toBeGreaterThan(0)
     expect(metaDocument.contentDigest).toMatch(/^sha256-/)
     expect(metaDocument.normalizedScope).toBe("prose")
+    expect(metaDocument.keywords).toContain("Example Code")
   })
 
   it("throws when stored digests do not match canonical output", () => {

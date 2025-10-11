@@ -119,6 +119,7 @@ export interface StepIntoVisionPostMetaDocument {
   assetSourceUrl?: string
   assetAuthor?: string
   assetLicense?: string
+  keywords?: string[]
   version: number
   contentDigest: string
 }

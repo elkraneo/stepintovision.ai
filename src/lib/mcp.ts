@@ -46,6 +46,23 @@ function ensureContentDigest(post: StepIntoVisionPost, rendered: RenderedPostMar
   }
 }
 
+function buildKeywords(post: StepIntoVisionPost): string[] {
+  const keywords = new Set<string>()
+  for (const category of post.categories) {
+    const normalized = category.trim()
+    if (normalized) {
+      keywords.add(normalized)
+    }
+  }
+  for (const tag of post.tags) {
+    const normalized = tag.trim()
+    if (normalized) {
+      keywords.add(normalized)
+    }
+  }
+  return Array.from(keywords)
+}
+
 export function buildResourceMeta(
   post: StepIntoVisionPost,
   options: BuildOptions = {},
@@ -53,6 +70,7 @@ export function buildResourceMeta(
   const markdownUri = buildResourceUri(post)
   const computed = options.rendered ?? buildRenderedPostMarkdown(post)
   ensureContentDigest(post, computed)
+  const keywords = buildKeywords(post)
   return {
     schema: "mcp.post.v1",
     canonicalUrl: post.link,
@@ -69,6 +87,7 @@ export function buildResourceMeta(
     version: post.version,
     contentDigest: computed.contentDigest,
     code: computed.code,
+    ...(keywords.length > 0 ? { keywords } : {}),
   }
 }
 
@@ -96,6 +115,7 @@ export function buildMetaDocument(
   const markdownUri = buildResourceUri(post)
   const computed = options.rendered ?? buildRenderedPostMarkdown(post)
   ensureContentDigest(post, computed)
+  const keywords = buildKeywords(post)
   const meta: StepIntoVisionPostMetaDocument = {
     schema: "mcp.post.v1",
     id: String(post.id),
@@ -136,6 +156,9 @@ export function buildMetaDocument(
     })),
     version: post.version,
     contentDigest: computed.contentDigest,
+  }
+  if (keywords.length > 0) {
+    meta.keywords = keywords
   }
   if (post.videoUrl) {
     meta.videoUrl = post.videoUrl
