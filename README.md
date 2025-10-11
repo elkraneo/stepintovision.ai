@@ -55,6 +55,20 @@ will emit a warning but still pass the value through). The CLI also respects the
 `STEPINTOVISION_BASE_URL` environment variable, which is useful when the
 production domain is inaccessible from your network.
 
+When direct HTTPS access to WordPress is unavailable, download the JSON export
+with a tool like `curl` and feed it to the CLI instead:
+
+```bash
+curl "https://mirror.example.com/wp-json/wp/v2/posts?per_page=50&_embed=true" \
+  | npm run ingest -- --source file --input -
+```
+
+You can also point `--input` at a saved file:
+
+```bash
+npm run ingest -- --source file --input ./exports/posts.json
+```
+
 ### Run the Development Server
 
 ```bash

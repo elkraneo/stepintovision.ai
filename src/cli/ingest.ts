@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
+import { readFile } from "node:fs/promises"
+
 import { DEFAULT_CATALOG_PATH, saveCatalog } from "../lib/catalog"
+import type { StepIntoVisionPost } from "../lib/types"
+import { postsFromWordPressJson } from "../lib/wordpress-file"
 import { fetchWordPressPosts } from "../lib/wordpress"
 
 interface CliOptions {
@@ -10,6 +14,8 @@ interface CliOptions {
   modifiedAfter?: string
   output: string
   delayMs: number
+  source: "wordpress" | "file"
+  input?: string
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -19,6 +25,7 @@ function parseArgs(argv: string[]): CliOptions {
     maxPages: 10,
     output: DEFAULT_CATALOG_PATH,
     delayMs: 0,
+    source: "wordpress",
   }
 
   const positional: string[] = []
@@ -76,6 +83,19 @@ function parseArgs(argv: string[]): CliOptions {
         }
         i += 1
         break
+      case "--source":
+        if (!next) throw new Error("--source requires a value")
+        if (next !== "wordpress" && next !== "file") {
+          throw new Error("--source must be either 'wordpress' or 'file'")
+        }
+        options.source = next
+        i += 1
+        break
+      case "--input":
+        if (!next) throw new Error("--input requires a value")
+        options.input = next
+        i += 1
+        break
       case "--help":
         printHelp()
         process.exit(0)
@@ -86,10 +106,18 @@ function parseArgs(argv: string[]): CliOptions {
   }
 
   if (positional.length > 0) {
-    options.baseUrl = positional[0]
+    if (options.source === "file") {
+      options.input = positional[0]
+    } else {
+      options.baseUrl = positional[0]
+    }
     if (positional.length > 1) {
       throw new Error(`Unexpected positional arguments: ${positional.slice(1).join(", ")}`)
     }
+  }
+
+  if (options.source === "file" && !options.input) {
+    throw new Error("--input is required when --source is 'file'")
   }
 
   return options
@@ -108,28 +136,43 @@ Options:
   --modified-after <date>   Only fetch posts modified after ISO date
   --output <file>           Output catalog file (default: ${DEFAULT_CATALOG_PATH})
   --delay-ms <number>       Delay between requests in milliseconds (default: 0)
+  --source <wordpress|file> Fetch from live WordPress or a saved JSON export
+  --input <file|->          File path or '-' for stdin when --source=file
   --help                    Show this message
 
 Positional arguments:
-  base-url                  Equivalent to --base-url for npm run ingest users
+  base-url                  Equivalent to --base-url when --source=wordpress
+  input                     Equivalent to --input when --source=file
 `)
 }
 
 async function main() {
+  let mode: "wordpress" | "file" = "wordpress"
   try {
     const options = parseArgs(process.argv.slice(2))
-    console.log(`Fetching posts from ${options.baseUrl}`)
+    mode = options.source
+    let posts: StepIntoVisionPost[]
+    let sourceLabel: string
 
-    const posts = await fetchWordPressPosts({
-      baseUrl: options.baseUrl,
-      perPage: options.perPage,
-      maxPages: options.maxPages,
-      modifiedAfter: options.modifiedAfter,
-      delayMs: options.delayMs,
-    })
+    if (options.source === "file") {
+      const input = options.input ?? "-"
+      sourceLabel = input === "-" ? "stdin" : input
+      console.log(`Reading posts from ${sourceLabel}`)
+      posts = await loadPostsFromInput(input)
+    } else {
+      console.log(`Fetching posts from ${options.baseUrl}`)
+      posts = await fetchWordPressPosts({
+        baseUrl: options.baseUrl,
+        perPage: options.perPage,
+        maxPages: options.maxPages,
+        modifiedAfter: options.modifiedAfter,
+        delayMs: options.delayMs,
+      })
+      sourceLabel = options.baseUrl
+    }
 
     console.log(`Fetched ${posts.length} posts. Writing catalog to ${options.output}`)
-    await saveCatalog(posts, options.output, { source: options.baseUrl })
+    await saveCatalog(posts, options.output, { source: sourceLabel })
     console.log("Catalog written successfully.")
   } catch (error) {
     if (error instanceof Error) {
@@ -138,14 +181,54 @@ async function main() {
       if (cause instanceof Error && cause.message) {
         console.error(`Caused by: ${cause.message}`)
       }
-      console.error(
-        "Set STEPINTOVISION_BASE_URL or pass --base-url to target an accessible WordPress instance.",
-      )
+      if (mode === "wordpress") {
+        console.error(
+          "Set STEPINTOVISION_BASE_URL or pass --base-url to target an accessible WordPress instance.",
+        )
+        console.error(
+          "When direct network access is unavailable, use --source=file with a saved WordPress JSON export.",
+        )
+      }
     } else {
       console.error(error)
     }
     process.exitCode = 1
   }
+}
+
+async function loadPostsFromInput(input: string): Promise<StepIntoVisionPost[]> {
+  const payload = input === "-" ? await readStdin() : await readFile(input, "utf-8")
+
+  let data: unknown
+  try {
+    data = JSON.parse(payload)
+  } catch (error) {
+    throw new Error("Failed to parse WordPress JSON export", {
+      cause: error instanceof Error ? error : undefined,
+    })
+  }
+
+  return postsFromWordPressJson(data)
+}
+
+async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) {
+    throw new Error("No data provided on stdin. Pass a file path or pipe JSON input.")
+  }
+
+  const chunks: string[] = []
+  return new Promise((resolve, reject) => {
+    process.stdin.setEncoding("utf8")
+    process.stdin.on("data", (chunk) => {
+      chunks.push(chunk)
+    })
+    process.stdin.on("error", (error) => {
+      reject(error)
+    })
+    process.stdin.on("end", () => {
+      resolve(chunks.join(""))
+    })
+  })
 }
 
 await main()
