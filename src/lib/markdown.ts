@@ -29,7 +29,13 @@ export function renderPostMarkdown(post: StepIntoVisionPost): string {
 }
 
 function normalizeForComparison(value: string): string {
-  return value.replace(/\s+/g, " ").trim().toLowerCase()
+  return value
+    .normalize("NFKD")
+    .replace(/[`*_~]/g, "")
+    .replace(/[\u2018\u2019\u201C\u201D]/g, "'")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .toLowerCase()
 }
 
 function stripExcerptFromBody(body: string, excerpt: string): string {

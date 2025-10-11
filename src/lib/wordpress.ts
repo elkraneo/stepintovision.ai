@@ -85,6 +85,28 @@ turndown.use(gfm)
 
 const REFERENCE_HOSTS = ["developer.apple.com", "docs.swift.org"]
 
+const API_REFERENCE_PATTERNS: Array<{
+  pattern: RegExp
+  title: string
+  url: string
+}> = [
+  {
+    pattern: /\bModel3D\b/,
+    title: "Model3D",
+    url: "https://developer.apple.com/documentation/realitykit/model3d/",
+  },
+  {
+    pattern: /\bModel3D\.Phase\b/,
+    title: "Model3D.Phase",
+    url: "https://developer.apple.com/documentation/realitykit/model3d/phase",
+  },
+  {
+    pattern: /\bResolvedModel3D\b/,
+    title: "ResolvedModel3D",
+    url: "https://developer.apple.com/documentation/realitykit/resolvedmodel3d",
+  },
+]
+
 function buildWordPressPostsUrl(baseUrl: string): URL {
   const trimmed = baseUrl.trim()
   if (trimmed.length === 0) {
@@ -415,13 +437,20 @@ function fixCommonGrammar(value: string): string {
         ? "Using .spatialOverlay, wrap"
         : "using .spatialOverlay, wrap",
     )
-    .replace(/\bmark the ([^.,;]+?) as resizable\b/gi, (match, subject: string) => {
-      const base = `make the ${subject} resizable`
-      return match[0] === "M"
-        ? base.replace(/^./, (char) => char.toUpperCase())
-        : base
+    .replace(/mark the ([^.,;]+?) and resizable/gi, (match, subject: string) => {
+      const prefix = match[0] === "M" ? "Mark" : "mark"
+      return `${prefix} the ${normalizeResizableSubject(subject)} as resizable`
     })
+    .replace(/mark the ([^.,;]+?) as resizable/gi, (match, subject: string) => {
+      const prefix = match[0] === "M" ? "Mark" : "mark"
+      return `${prefix} the ${normalizeResizableSubject(subject)} as resizable`
+    })
+    .replace(/Could not load model \\\(name\\\)/g, "Could not load model.")
     .replace(/\\`/g, "`")
+}
+
+function normalizeResizableSubject(subject: string): string {
+  return subject.replace(/\bearth\b/gi, "Earth").trim()
 }
 
 function canonicalizeMarkdown(value: string): string {
@@ -622,7 +651,6 @@ function prepareContent(rawHtml: string): PreparedContent {
     }
   })
 
-  const references = collectReferenceLinks($)
   const links = collectDeveloperLinks($)
   const assetData = collectAssetMetadata($)
   const videoUrl = collectVideoUrl($)
@@ -631,6 +659,8 @@ function prepareContent(rawHtml: string): PreparedContent {
 
   const markdown = turndown.turndown(cleanedHtml)
   const normalizedMarkdown = canonicalizeMarkdown(fixCommonGrammar(markdown.trim()))
+  const baseReferences = collectReferenceLinks($)
+  const references = augmentReferencesWithApiMentions(baseReferences, normalizedMarkdown)
 
   const text = fixCommonGrammar(
     htmlToText(cleanedHtml, {
@@ -692,6 +722,7 @@ function inferCodeLanguage(code: string): string | null {
     "Edge3D.",
     "rotation3DLayout",
     "ModelViewSimple",
+    "ModelView",
     "Model3D",
     "RealityView",
     "RealityViewContent",
@@ -781,6 +812,24 @@ function collectReferenceLinks($: ReturnType<typeof load>): StepIntoVisionSeeAls
   })
 
   return dedupeSeeAlso(links)
+}
+
+function augmentReferencesWithApiMentions(
+  base: StepIntoVisionSeeAlsoItem[],
+  markdown: string,
+): StepIntoVisionSeeAlsoItem[] {
+  const matches: StepIntoVisionSeeAlsoItem[] = []
+  for (const candidate of API_REFERENCE_PATTERNS) {
+    if (candidate.pattern.test(markdown)) {
+      matches.push({ title: candidate.title, url: candidate.url })
+    }
+  }
+
+  if (matches.length === 0) {
+    return dedupeSeeAlso(base)
+  }
+
+  return dedupeSeeAlso([...base, ...matches])
 }
 
 function dedupeSeeAlso(items: StepIntoVisionSeeAlsoItem[]): StepIntoVisionSeeAlsoItem[] {
