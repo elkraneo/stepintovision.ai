@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { normalizeWordPressPost } from "../src/lib/wordpress"
+import { fetchWordPressPosts, normalizeWordPressPost } from "../src/lib/wordpress"
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe("normalizeWordPressPost", () => {
   it("extracts categories, tags, and hero image", () => {
@@ -41,5 +45,39 @@ describe("normalizeWordPressPost", () => {
     expect(post.title).toBe("Example & Test")
     expect(post.contentHtml).not.toContain("<script")
     expect(post.contentText).toContain("Main content")
+  })
+})
+
+describe("fetchWordPressPosts", () => {
+  it("stops requesting pages when the total pages header is reached", async () => {
+    const posts = [
+      {
+        id: 1,
+        slug: "first",
+        link: "https://stepinto.vision/first",
+        date: "2024-01-01T00:00:00",
+        modified: "2024-01-02T00:00:00",
+        title: { rendered: "First" },
+        excerpt: { rendered: "<p>First</p>" },
+        content: { rendered: "<p>Body</p>" },
+      },
+    ]
+
+    const response = new Response(JSON.stringify(posts), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "X-WP-TotalPages": "1",
+      },
+    })
+
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response)
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await fetchWordPressPosts({ maxPages: 5 })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(result).toHaveLength(1)
+    expect(result[0]?.slug).toBe("first")
   })
 })

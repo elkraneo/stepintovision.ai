@@ -71,6 +71,7 @@ export async function fetchWordPressPosts(options: WordPressIngestOptions = {}):
   } = options
 
   const posts: StepIntoVisionPost[] = []
+  let totalPages: number | null = null
 
   for (let page = 1; page <= maxPages; page += 1) {
     const url = buildWordPressPostsUrl(baseUrl)
@@ -125,6 +126,14 @@ export async function fetchWordPressPosts(options: WordPressIngestOptions = {}):
       throw new Error(message)
     }
 
+    const totalPagesHeader = response.headers.get("X-WP-TotalPages")
+    if (totalPagesHeader) {
+      const parsed = Number.parseInt(totalPagesHeader, 10)
+      if (!Number.isNaN(parsed)) {
+        totalPages = parsed
+      }
+    }
+
     const data = (await response.json()) as WordPressPost[]
 
     if (data.length === 0) {
@@ -133,6 +142,10 @@ export async function fetchWordPressPosts(options: WordPressIngestOptions = {}):
 
     for (const raw of data) {
       posts.push(normalizeWordPressPost(raw))
+    }
+
+    if (totalPages !== null && page >= totalPages) {
+      break
     }
 
     if (delayMs > 0 && page < maxPages) {
