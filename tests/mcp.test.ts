@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildMetaResourceItem, buildResourceItem } from "../src/lib/mcp"
+import { buildMetaDocument, buildMetaResourceItem, buildResourceItem } from "../src/lib/mcp"
 import { normalizeWordPressPost } from "../src/lib/wordpress"
 
 function createSampleWordPressPost() {
@@ -82,6 +82,20 @@ describe("MCP resource metadata", () => {
       canonicalUrl: post.link,
       markdownUri: `stepintovision://post/${post.slug}`,
     })
+  })
+
+  it("recomputes code metadata when missing on legacy catalog entries", () => {
+    const post = normalizeWordPressPost(createSampleWordPressPost() as never)
+    post.code = { policy: "verbatim", blocks: [] }
+    post.contentDigest = ""
+
+    const resource = buildResourceItem(post)
+    const metaDocument = buildMetaDocument(post)
+
+    const resourceMeta = resource._meta as { code?: { blocks?: unknown[] } }
+    expect(resourceMeta.code?.blocks?.length).toBeGreaterThan(0)
+    expect(metaDocument.code.blocks.length).toBeGreaterThan(0)
+    expect(metaDocument.contentDigest).toMatch(/^sha256-/)
   })
 })
 
