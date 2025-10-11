@@ -41,19 +41,10 @@ Fetch Step Into Vision posts and write them to `data/stepintovision.json`:
 npm run ingest
 ```
 
-Use `--help` to list additional options including pagination controls and an
-alternative base URL for staged environments. Pass extra arguments after `--`
-when using `npm run` so the CLI receives them:
-
-```bash
-npm run ingest -- --base-url https://mirror.example.com
-```
-
-For convenience the first positional argument is also treated as a base URL, so
-`npm run ingest https://mirror.example.com` works if you forget the `--` (npm
-will emit a warning but still pass the value through). The CLI also respects the
-`STEPINTOVISION_BASE_URL` environment variable when you need to target an
-alternate deployment.
+The CLI is dedicated to the production site at
+[`https://stepinto.vision`](https://stepinto.vision). Optional flags are limited
+to `--max-pages`, `--modified-after`, and `--output` for controlling pagination,
+incremental syncs, and the destination file path.
 
 ### Run the Development Server
 
@@ -69,16 +60,17 @@ returns service metadata and available routes.
 - `GET /posts` – list paginated posts with optional `category`, `tag`, `limit`,
   and `offset` query parameters.
 - `GET /posts/:slug` – fetch a single post by slug. Request `text/markdown` to
-  receive a Markdown rendition that includes HTML source.
+  receive a Markdown rendition that includes HTML source and YAML front matter.
 - `GET /posts/id/:id` – fetch a post by its numeric WordPress identifier.
 - `GET /search?q=vision` – keyword search backed by Fuse.js fuzzy search.
 - `POST /mcp` (Streamable HTTP) – Model Context Protocol endpoint powering the
-  Step Into Vision tools.
+  Step Into Vision tools. When deploying remotely be sure to append `/mcp` to
+  the service URL.
 
 ### MCP Integration
 
 Configure compatible clients to connect to the MCP endpoint directly when
-self-hosting:
+self-hosting. Note the `/mcp` path segment:
 
 ```json
 {
@@ -99,7 +91,8 @@ Available MCP tools:
 
 And a resource template:
 
-- `stepintovision://post/{slug}` – Provides Markdown for a specific post.
+- `stepintovision://post/{slug}` – Provides Markdown for a specific post with
+  detailed YAML metadata and the original HTML payload.
 
 ### Testing & Quality
 

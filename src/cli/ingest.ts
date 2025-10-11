@@ -4,25 +4,19 @@ import { DEFAULT_CATALOG_PATH, saveCatalog } from "../lib/catalog"
 import type { StepIntoVisionPost } from "../lib/types"
 import { fetchWordPressPosts } from "../lib/wordpress"
 
+const STEP_INTO_VISION_URL = "https://stepinto.vision"
+
 interface CliOptions {
-  baseUrl: string
-  perPage: number
+  output: string
   maxPages: number
   modifiedAfter?: string
-  output: string
-  delayMs: number
 }
 
 function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
-    baseUrl: process.env.STEPINTOVISION_BASE_URL ?? "https://stepinto.vision",
-    perPage: 50,
-    maxPages: 10,
     output: DEFAULT_CATALOG_PATH,
-    delayMs: 0,
+    maxPages: 10,
   }
-
-  const positional: string[] = []
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
@@ -32,23 +26,14 @@ function parseArgs(argv: string[]): CliOptions {
     }
 
     if (!arg.startsWith("--")) {
-      positional.push(arg)
-      continue
+      throw new Error(`Unexpected positional argument: ${arg}`)
     }
 
     const next = argv[i + 1]
     switch (arg) {
-      case "--base-url":
-        if (!next) throw new Error("--base-url requires a value")
-        options.baseUrl = next
-        i += 1
-        break
-      case "--per-page":
-        if (!next) throw new Error("--per-page requires a value")
-        options.perPage = Number.parseInt(next, 10)
-        if (Number.isNaN(options.perPage) || options.perPage <= 0) {
-          throw new Error("--per-page must be a positive integer")
-        }
+      case "--output":
+        if (!next) throw new Error("--output requires a file path")
+        options.output = next
         i += 1
         break
       case "--max-pages":
@@ -64,19 +49,6 @@ function parseArgs(argv: string[]): CliOptions {
         options.modifiedAfter = next
         i += 1
         break
-      case "--output":
-        if (!next) throw new Error("--output requires a file path")
-        options.output = next
-        i += 1
-        break
-      case "--delay-ms":
-        if (!next) throw new Error("--delay-ms requires a value")
-        options.delayMs = Number.parseInt(next, 10)
-        if (Number.isNaN(options.delayMs) || options.delayMs < 0) {
-          throw new Error("--delay-ms must be a non-negative integer")
-        }
-        i += 1
-        break
       case "--help":
         printHelp()
         process.exit(0)
@@ -86,50 +58,34 @@ function parseArgs(argv: string[]): CliOptions {
     }
   }
 
-  if (positional.length > 0) {
-    options.baseUrl = positional[0]
-    if (positional.length > 1) {
-      throw new Error(`Unexpected positional arguments: ${positional.slice(1).join(", ")}`)
-    }
-  }
-
   return options
 }
 
 function printHelp() {
-  const defaultBaseUrl = process.env.STEPINTOVISION_BASE_URL ?? "https://stepinto.vision"
   console.log(`Step Into Vision ingestion
 
-Usage: npm run ingest -- [options] [base-url]
+Usage: npm run ingest -- [options]
 
 Options:
-  --base-url <url>          Base WordPress site URL (default: ${defaultBaseUrl})
-  --per-page <number>       Number of posts per request (default: 50)
+  --output <file>           Output catalog file (default: ${DEFAULT_CATALOG_PATH})
   --max-pages <number>      Maximum number of pages to fetch (default: 10)
   --modified-after <date>   Only fetch posts modified after ISO date
-  --output <file>           Output catalog file (default: ${DEFAULT_CATALOG_PATH})
-  --delay-ms <number>       Delay between requests in milliseconds (default: 0)
   --help                    Show this message
-
-Positional arguments:
-  base-url                  Equivalent to --base-url
 `)
 }
 
 async function main() {
   try {
     const options = parseArgs(process.argv.slice(2))
-    console.log(`Fetching posts from ${options.baseUrl}`)
+    console.log(`Fetching posts from ${STEP_INTO_VISION_URL}`)
     const posts: StepIntoVisionPost[] = await fetchWordPressPosts({
-      baseUrl: options.baseUrl,
-      perPage: options.perPage,
+      baseUrl: STEP_INTO_VISION_URL,
       maxPages: options.maxPages,
       modifiedAfter: options.modifiedAfter,
-      delayMs: options.delayMs,
     })
 
     console.log(`Fetched ${posts.length} posts. Writing catalog to ${options.output}`)
-    await saveCatalog(posts, options.output, { source: options.baseUrl })
+    await saveCatalog(posts, options.output, { source: STEP_INTO_VISION_URL })
     console.log("Catalog written successfully.")
   } catch (error) {
     if (error instanceof Error) {
@@ -138,9 +94,6 @@ async function main() {
       if (cause instanceof Error && cause.message) {
         console.error(`Caused by: ${cause.message}`)
       }
-      console.error(
-        "Set STEPINTOVISION_BASE_URL or pass --base-url to target an accessible WordPress instance.",
-      )
     } else {
       console.error(error)
     }

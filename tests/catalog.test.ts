@@ -55,6 +55,8 @@ describe("catalog helpers", () => {
 
   it("renders markdown with metadata", () => {
     const markdown = renderPostMarkdown(samplePosts[0])
+    expect(markdown).toMatch(/---\nid: 1\nslug: "hello-world"/)
+    expect(markdown).toContain("readingTimeMinutes:")
     expect(markdown).toContain("# Hello World")
     expect(markdown).toContain("Source: https://stepinto.vision/hello-world")
     expect(markdown).toContain("```html")
