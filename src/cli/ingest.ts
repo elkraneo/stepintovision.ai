@@ -14,7 +14,7 @@ interface CliOptions {
 
 function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
-    baseUrl: "https://stepintovision.ai",
+    baseUrl: process.env.STEPINTOVISION_BASE_URL ?? "https://stepintovision.ai",
     perPage: 50,
     maxPages: 10,
     output: DEFAULT_CATALOG_PATH,
@@ -86,7 +86,7 @@ function printHelp() {
 Usage: npm run ingest -- [options]
 
 Options:
-  --base-url <url>          Base WordPress site URL (default: https://stepintovision.ai)
+  --base-url <url>          Base WordPress site URL (default: ${process.env.STEPINTOVISION_BASE_URL ?? "https://stepintovision.ai"})
   --per-page <number>       Number of posts per request (default: 50)
   --max-pages <number>      Maximum number of pages to fetch (default: 10)
   --modified-after <date>   Only fetch posts modified after ISO date
@@ -113,7 +113,18 @@ async function main() {
     await saveCatalog(posts, options.output, { source: options.baseUrl })
     console.log("Catalog written successfully.")
   } catch (error) {
-    console.error(error instanceof Error ? error.message : error)
+    if (error instanceof Error) {
+      console.error(error.message)
+      const cause = (error as { cause?: unknown }).cause
+      if (cause instanceof Error && cause.message) {
+        console.error(`Caused by: ${cause.message}`)
+      }
+      console.error(
+        "Set STEPINTOVISION_BASE_URL or pass --base-url to target an accessible WordPress instance.",
+      )
+    } else {
+      console.error(error)
+    }
     process.exitCode = 1
   }
 }

@@ -80,12 +80,19 @@ export async function fetchWordPressPosts(options: WordPressIngestOptions = {}):
       url.searchParams.set("modified_after", modifiedAfter)
     }
 
-    const response = await fetch(url, {
-      headers: {
-        "Accept": "application/json",
-      },
-      signal,
-    })
+    let response: Awaited<ReturnType<typeof fetch>>
+    try {
+      response = await fetch(url, {
+        headers: {
+          "Accept": "application/json",
+        },
+        signal,
+      })
+    } catch (error) {
+      throw new Error(`Failed to fetch WordPress posts from ${url}`, {
+        cause: error instanceof Error ? error : undefined,
+      })
+    }
 
     if (!response.ok) {
       throw new Error(`Failed to fetch WordPress posts: ${response.status} ${response.statusText}`)

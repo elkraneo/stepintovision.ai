@@ -42,7 +42,9 @@ npm run ingest
 ```
 
 Use `--help` to list additional options including pagination controls and an
-alternative base URL for staging or archived copies.
+alternative base URL for staging or archived copies. The CLI also respects the
+`STEPINTOVISION_BASE_URL` environment variable, which is useful when the
+production domain is inaccessible from your network.
 
 ### Run the Development Server
 
