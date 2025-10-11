@@ -150,6 +150,15 @@ describe("normalizeWordPressPost", () => {
     expect(post.normalized).toBe(true)
     expect(post.verbatim).toBe(false)
     expect(post.contentMarkdown).not.toContain("xtension")
+    expect(post.code.policy).toBe("verbatim")
+    expect(post.code.blocks.length).toBeGreaterThan(0)
+    expect(post.code.blocks[0]).toEqual(
+      expect.objectContaining({
+        id: "code-1",
+        lang: "swift",
+        digest: expect.stringMatching(/^sha256-/),
+      }),
+    )
   })
 
   it("labels glass background usage as Swift without mutating tokens", () => {
@@ -181,6 +190,16 @@ glassBackgroundBox(padding: 12, .all)</code></pre>
       "glassBackgroundBox(padding: 12, .vertical)",
     )
     expect(post.contentMarkdown).toContain("glassBackgroundBox(padding: 12, .all)")
+    expect(post.code.policy).toBe("verbatim")
+    expect(post.code.blocks).toEqual([
+      {
+        id: "code-1",
+        lang: "swift",
+        startLine: expect.any(Number),
+        endLine: expect.any(Number),
+        digest: expect.stringMatching(/^sha256-/),
+      },
+    ])
   })
 
   it("falls back to numeric taxonomy IDs when embedded terms are absent", () => {
@@ -205,6 +224,8 @@ glassBackgroundBox(padding: 12, .all)</code></pre>
     expect(post.author).toBe("Step Into Vision")
     expect(post.normalized).toBe(true)
     expect(post.verbatim).toBe(false)
+    expect(post.code.policy).toBe("verbatim")
+    expect(post.code.blocks).toHaveLength(0)
   })
 })
 

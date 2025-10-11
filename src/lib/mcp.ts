@@ -48,6 +48,7 @@ function buildResourceMeta(post: StepIntoVisionPost): Record<string, unknown> {
     verbatim: post.verbatim,
     version: post.version,
     contentDigest: post.contentDigest,
+    code: post.code,
   }
 }
 
@@ -91,6 +92,7 @@ function buildMetaDocument(post: StepIntoVisionPost): StepIntoVisionPostMetaDocu
     readingTimeSeconds: post.readingTimeSeconds,
     normalized: post.normalized,
     verbatim: post.verbatim,
+    code: post.code,
     media: post.media.map((item) => ({
       role: item.role,
       url: item.url,

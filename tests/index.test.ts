@@ -45,6 +45,7 @@ beforeAll(async () => {
         links: [],
         contentDigest: "sha256-test",
         media: [],
+        code: { policy: "verbatim", blocks: [] },
       },
     ],
   }

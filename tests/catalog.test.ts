@@ -33,6 +33,7 @@ const samplePosts: StepIntoVisionPost[] = [
     links: [],
     contentDigest: "sha256-hello",
     media: [],
+    code: { policy: "verbatim", blocks: [] },
   },
   {
     id: 2,
@@ -62,6 +63,7 @@ const samplePosts: StepIntoVisionPost[] = [
     links: [],
     contentDigest: "sha256-dive",
     media: [],
+    code: { policy: "verbatim", blocks: [] },
   },
 ]
 

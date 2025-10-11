@@ -27,6 +27,22 @@ export interface StepIntoVisionLink {
   title?: string
 }
 
+export type StepIntoVisionCodePolicy = "verbatim" | "verbatim+normalized-sidecar"
+
+export interface StepIntoVisionCodeBlock {
+  id: string
+  lang: string
+  startLine: number
+  endLine: number
+  digest: string
+  normalizedUri?: string
+}
+
+export interface StepIntoVisionCodeMetadata {
+  policy: StepIntoVisionCodePolicy
+  blocks: StepIntoVisionCodeBlock[]
+}
+
 export interface StepIntoVisionPost {
   id: number
   slug: string
@@ -59,6 +75,7 @@ export interface StepIntoVisionPost {
   assetSourceUrl?: string | null
   assetAuthor?: string | null
   assetLicense?: string | null
+  code: StepIntoVisionCodeMetadata
 }
 
 export interface StepIntoVisionPostMetaDocument {
@@ -89,6 +106,7 @@ export interface StepIntoVisionPostMetaDocument {
   readingTimeSeconds: number
   normalized: boolean
   verbatim: boolean
+  code: StepIntoVisionCodeMetadata
   media: StepIntoVisionMedia[]
   seeAlso: StepIntoVisionSeeAlsoItem[]
   references: StepIntoVisionSeeAlsoItem[]

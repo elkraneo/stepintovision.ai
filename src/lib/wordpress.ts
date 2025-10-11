@@ -6,6 +6,8 @@ import TurndownService from "turndown"
 import { gfm } from "turndown-plugin-gfm"
 
 import type {
+  StepIntoVisionCodeBlock,
+  StepIntoVisionCodeMetadata,
   StepIntoVisionPost,
   StepIntoVisionSeeAlsoItem,
   StepIntoVisionMedia,
@@ -293,6 +295,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
       .trim(),
   )
 
+  const code = extractCodeMetadata(contentMarkdown)
   const contentDigest = createHash("sha256").update(contentMarkdown, "utf8").digest("hex")
 
   return {
@@ -327,6 +330,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     assetSourceUrl,
     assetAuthor,
     assetLicense,
+    code,
   }
 }
 
@@ -497,6 +501,58 @@ interface PreparedContent {
   assetSourceUrl: string | null
   assetAuthor: string | null
   assetLicense: string | null
+}
+
+function extractCodeMetadata(markdown: string): StepIntoVisionCodeMetadata {
+  const lines = markdown.split("\n")
+  const blocks: StepIntoVisionCodeBlock[] = []
+  let inside = false
+  let info = ""
+  let startLine = 0
+  let buffer: string[] = []
+
+  const pushBlock = (endLine: number) => {
+    const lang = info.split(/\s+/)[0] || "text"
+    const codeText = buffer.join("\n")
+    const digest = createHash("sha256").update(codeText, "utf8").digest("hex")
+    blocks.push({
+      id: `code-${blocks.length + 1}`,
+      lang,
+      startLine,
+      endLine,
+      digest: `sha256-${digest}`,
+    })
+  }
+
+  lines.forEach((line, index) => {
+    const lineNumber = index + 1
+    if (!inside) {
+      const match = line.match(/^```(.*)$/)
+      if (match) {
+        inside = true
+        info = match[1]?.trim() ?? ""
+        startLine = lineNumber
+        buffer = []
+      }
+      return
+    }
+
+    if (line.startsWith("```")) {
+      pushBlock(lineNumber)
+      inside = false
+      info = ""
+      buffer = []
+      startLine = 0
+      return
+    }
+
+    buffer.push(line)
+  })
+
+  return {
+    policy: "verbatim",
+    blocks,
+  }
 }
 
 function prepareContent(rawHtml: string): PreparedContent {
