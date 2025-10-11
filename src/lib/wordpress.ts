@@ -41,7 +41,7 @@ interface WordPressPost {
   }
 }
 
-const DEFAULT_BASE_URL = "https://stepintovision.ai"
+const DEFAULT_BASE_URL = "https://stepinto.vision"
 const DEFAULT_PER_PAGE = 50
 const DEFAULT_MAX_PAGES = 10
 

@@ -20,7 +20,7 @@ interface CliOptions {
 
 function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
-    baseUrl: process.env.STEPINTOVISION_BASE_URL ?? "https://stepintovision.ai",
+    baseUrl: process.env.STEPINTOVISION_BASE_URL ?? "https://stepinto.vision",
     perPage: 50,
     maxPages: 10,
     output: DEFAULT_CATALOG_PATH,
@@ -124,7 +124,7 @@ function parseArgs(argv: string[]): CliOptions {
 }
 
 function printHelp() {
-  const defaultBaseUrl = process.env.STEPINTOVISION_BASE_URL ?? "https://stepintovision.ai"
+  const defaultBaseUrl = process.env.STEPINTOVISION_BASE_URL ?? "https://stepinto.vision"
   console.log(`Step Into Vision ingestion
 
 Usage: npm run ingest -- [options] [base-url]

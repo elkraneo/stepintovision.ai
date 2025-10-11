@@ -12,7 +12,7 @@ const samplePosts: StepIntoVisionPost[] = [
     excerpt: "An introduction to Step Into Vision",
     contentHtml: "<p>Hello Vision</p>",
     contentText: "Hello Vision",
-    link: "https://stepintovision.ai/hello-world",
+    link: "https://stepinto.vision/hello-world",
     publishedAt: "2024-01-01T00:00:00Z",
     updatedAt: "2024-01-01T00:00:00Z",
     categories: ["Announcements"],
@@ -26,7 +26,7 @@ const samplePosts: StepIntoVisionPost[] = [
     excerpt: "A deep dive",
     contentHtml: "<p>Dive</p>",
     contentText: "Dive",
-    link: "https://stepintovision.ai/deep-dive",
+    link: "https://stepinto.vision/deep-dive",
     publishedAt: "2024-02-01T00:00:00Z",
     updatedAt: "2024-02-02T00:00:00Z",
     categories: ["Research"],
@@ -56,7 +56,7 @@ describe("catalog helpers", () => {
   it("renders markdown with metadata", () => {
     const markdown = renderPostMarkdown(samplePosts[0])
     expect(markdown).toContain("# Hello World")
-    expect(markdown).toContain("Source: https://stepintovision.ai/hello-world")
+    expect(markdown).toContain("Source: https://stepinto.vision/hello-world")
     expect(markdown).toContain("```html")
   })
 })

@@ -10,7 +10,7 @@ export async function loadCatalog(filePath = DEFAULT_CATALOG_PATH): Promise<Cata
   if (!existsSync(filePath)) {
     return {
       metadata: {
-        source: "https://stepintovision.ai",
+        source: "https://stepinto.vision",
         generatedAt: new Date(0).toISOString(),
         itemCount: 0,
       },
@@ -30,7 +30,7 @@ export async function saveCatalog(
 ): Promise<void> {
   const payload: CatalogFile = {
     metadata: {
-      source: metadata.source ?? "https://stepintovision.ai",
+      source: metadata.source ?? "https://stepinto.vision",
       generatedAt: metadata.generatedAt ?? new Date().toISOString(),
       itemCount: posts.length,
     },

@@ -7,7 +7,7 @@ describe("normalizeWordPressPost", () => {
     const rawPost = {
       id: 100,
       slug: "example",
-      link: "https://stepintovision.ai/example",
+      link: "https://stepinto.vision/example",
       date: "2024-03-01T00:00:00",
       modified: "2024-03-02T00:00:00",
       title: { rendered: "Example &amp; Test" },
@@ -28,7 +28,7 @@ describe("normalizeWordPressPost", () => {
           ],
         ],
         "wp:featuredmedia": [
-          { source_url: "https://stepintovision.ai/wp-content/uploads/example.jpg" },
+          { source_url: "https://stepinto.vision/wp-content/uploads/example.jpg" },
         ],
       },
     }
