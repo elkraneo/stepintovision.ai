@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { canonicalizeMarkdown, extractCodeMetadata } from "../src/lib/markdown-utils"
+import {
+  canonicalizeMarkdown,
+  ensureCodeFenceLanguages,
+  extractCodeMetadata,
+} from "../src/lib/markdown-utils"
 
 describe("canonicalizeMarkdown", () => {
   it("preserves code tokens while trimming prose", () => {
@@ -30,5 +34,25 @@ describe("canonicalizeMarkdown", () => {
 
     expect(code.blocks).toHaveLength(1)
     expect(code.blocks[0]?.digest).toMatch(/^sha256-/)
+  })
+
+  it("retags Swift fences detected after canonicalization", () => {
+    const markdown = [
+      "```text",
+      "Model3D(named: \"Earth\", bundle: realityKitContentBundle)",
+      "```",
+      "",
+    ].join("\n")
+
+    const canonical = canonicalizeMarkdown(markdown)
+    const retagged = ensureCodeFenceLanguages(canonical)
+    const code = extractCodeMetadata(retagged)
+
+    expect(retagged.startsWith("```swift\n")).toBe(true)
+    expect(code.blocks).toEqual([
+      expect.objectContaining({
+        lang: "swift",
+      }),
+    ])
   })
 })

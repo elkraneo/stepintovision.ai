@@ -8,9 +8,12 @@ export interface StepIntoVisionMedia {
   height?: number | null
 }
 
+export type StepIntoVisionReferenceRole = "docs" | "article" | "video" | "discussion"
+
 export interface StepIntoVisionSeeAlsoItem {
   title: string
   url: string
+  role?: StepIntoVisionReferenceRole
 }
 
 export type StepIntoVisionLinkRole =

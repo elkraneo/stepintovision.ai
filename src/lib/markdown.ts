@@ -4,7 +4,11 @@ import type {
   StepIntoVisionCodeMetadata,
   StepIntoVisionPost,
 } from "./types"
-import { canonicalizeMarkdown, extractCodeMetadata } from "./markdown-utils"
+import {
+  canonicalizeMarkdown,
+  ensureCodeFenceLanguages,
+  extractCodeMetadata,
+} from "./markdown-utils"
 
 export interface RenderedPostMarkdown {
   markdown: string
@@ -38,7 +42,8 @@ export function buildRenderedPostMarkdown(post: StepIntoVisionPost): RenderedPos
   }
 
   const raw = lines.join("\n")
-  const markdown = canonicalizeMarkdown(raw)
+  let markdown = canonicalizeMarkdown(raw)
+  markdown = ensureCodeFenceLanguages(markdown)
   const code = extractCodeMetadata(markdown)
   const digest = createHash("sha256").update(markdown, "utf8").digest("hex")
 

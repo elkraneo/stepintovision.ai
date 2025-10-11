@@ -113,6 +113,7 @@ describe("normalizeWordPressPost", () => {
       {
         title: "Edge3D.Set",
         url: "https://developer.apple.com/documentation/swiftui/edge3d/set",
+        role: "docs",
       },
     ])
     expect(post.locale).toBe("en")
@@ -281,19 +282,47 @@ glassBackgroundBox(padding: 12, .all)</code></pre>
       }),
     )
 
-    expect(post.links).toContainEqual(
-      expect.objectContaining({
-        role: "discussion",
-        url: "https://forums.developer.apple.com/forums/thread/12345",
-      }),
-    )
+    expect(post.links.find((link) => link.role === "discussion")).toBeUndefined()
 
     expect(post.links.find((link) => link.role === "docs")).toBeUndefined()
     expect(post.references).toContainEqual(
       expect.objectContaining({
         url: "https://developer.apple.com/documentation/realitykit/model3d/",
+        role: "docs",
       }),
     )
+    expect(post.references).toContainEqual(
+      expect.objectContaining({
+        url: "https://forums.developer.apple.com/forums/thread/12345",
+        role: "discussion",
+      }),
+    )
+  })
+
+  it("captures external article references with roles", () => {
+    const rawPost = {
+      id: 401,
+      slug: "volume-window-zoom",
+      link: "https://stepinto.vision/example-code/volume-window-zoom",
+      date: "2024-10-10T00:00:00Z",
+      modified: "2024-10-10T00:00:00Z",
+      title: { rendered: "Volume Window Zoom" },
+      excerpt: { rendered: "<p>Excerpt</p>" },
+      content: {
+        rendered: `
+          <p>See Drew Olbrich's <a href="https://www.lunarskydiving.com/blog/volume-window-zoom/?login=true">Volume Window Zoom</a> write-up.</p>
+        `,
+      },
+    }
+
+    const post = normalizeWordPressPost(rawPost as never)
+
+    expect(post.references).toContainEqual({
+      title: "Volume Window Zoom",
+      url: "https://www.lunarskydiving.com/blog/volume-window-zoom/",
+      role: "article",
+    })
+    expect(post.links.find((link) => link.url.includes("lunarskydiving.com"))).toBeUndefined()
   })
 })
 

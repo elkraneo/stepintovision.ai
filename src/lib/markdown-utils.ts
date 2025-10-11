@@ -4,6 +4,7 @@ import type {
   StepIntoVisionCodeBlock,
   StepIntoVisionCodeMetadata,
 } from "./types"
+import { inferCodeLanguage } from "./code-language"
 
 export function canonicalizeMarkdown(value: string): string {
   const normalizedLineEndings = value.replace(/\r\n/g, "\n")
@@ -89,4 +90,67 @@ export function extractCodeMetadata(markdown: string): StepIntoVisionCodeMetadat
     policy: "verbatim",
     blocks,
   }
+}
+
+export function ensureCodeFenceLanguages(markdown: string): string {
+  const lines = markdown.split("\n")
+  const result = [...lines]
+
+  let inside = false
+  let fenceIndex = -1
+  let info = ""
+  let buffer: string[] = []
+
+  const updateFence = () => {
+    if (fenceIndex < 0) {
+      return
+    }
+
+    const codeText = buffer.join("\n")
+    const detected = inferCodeLanguage(codeText)
+    if (!detected) {
+      return
+    }
+
+    const trimmedInfo = info.trim()
+    const infoParts = trimmedInfo ? trimmedInfo.split(/\s+/) : []
+    const currentLang = infoParts[0] ?? ""
+    const remainder = trimmedInfo.slice(currentLang.length).trim()
+
+    if (currentLang && currentLang !== "text" && currentLang !== "plain") {
+      return
+    }
+
+    const newInfo = remainder ? `${detected} ${remainder}` : detected
+    result[fenceIndex] = "```" + newInfo
+  }
+
+  lines.forEach((line, index) => {
+    if (line.startsWith("```") && !inside) {
+      inside = true
+      fenceIndex = index
+      info = line.slice(3)
+      buffer = []
+      return
+    }
+
+    if (line.startsWith("```") && inside) {
+      updateFence()
+      inside = false
+      fenceIndex = -1
+      info = ""
+      buffer = []
+      return
+    }
+
+    if (inside) {
+      buffer.push(line)
+    }
+  })
+
+  let canonical = result.join("\n")
+  if (!canonical.endsWith("\n")) {
+    canonical += "\n"
+  }
+  return canonical
 }

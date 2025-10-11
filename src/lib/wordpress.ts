@@ -10,9 +10,11 @@ import type {
   StepIntoVisionLink,
   StepIntoVisionLinkRole,
   StepIntoVisionStatus,
+  StepIntoVisionReferenceRole,
 } from "./types"
 import { canonicalizeMarkdown } from "./markdown-utils"
 import { buildRenderedPostMarkdown } from "./markdown"
+import { inferCodeLanguage } from "./code-language"
 
 export interface WordPressIngestOptions {
   baseUrl?: string
@@ -97,8 +99,6 @@ const turndown = new TurndownService({
   headingStyle: "atx",
 })
 turndown.use(gfm)
-
-const REFERENCE_HOSTS = ["developer.apple.com", "docs.swift.org"]
 
 const API_REFERENCE_PATTERNS: Array<{
   pattern: RegExp
@@ -735,51 +735,6 @@ function prepareContent(rawHtml: string, context: PrepareContentContext = {}): P
   }
 }
 
-function inferCodeLanguage(code: string): string | null {
-  const trimmed = code.trim()
-  if (!trimmed) {
-    return null
-  }
-
-  if (/\bimport\s+(SwiftUI|RealityKit|RealityKitContent)/.test(trimmed)) {
-    return "swift"
-  }
-  if (/\bstruct\s+[A-Z]/.test(trimmed) && trimmed.includes(": View")) {
-    return "swift"
-  }
-  if (/^\s*(extension|xtension)\s+[A-Z]/m.test(trimmed)) {
-    return "swift"
-  }
-  if (/\bfunc\s+[a-zA-Z0-9_]+\s*\(/.test(trimmed)) {
-    return "swift"
-  }
-  if (/class\s+[A-Z]/.test(trimmed) && trimmed.includes("NSObject")) {
-    return "swift"
-  }
-  if (/^\s*(var|let)\s+[A-Za-z0-9_]+\s*:\s*[A-Z]/m.test(trimmed)) {
-    return "swift"
-  }
-  const swiftMarkers = [
-    "spatialOverlay",
-    "glassBackgroundDisplayMode",
-    "glassBackgroundBox",
-    "Edge3D.",
-    "rotation3DLayout",
-    "ModelViewSimple",
-    "ModelView",
-    "Model3D",
-    "RealityView",
-    "RealityViewContent",
-  ]
-  if (swiftMarkers.some((marker) => trimmed.includes(marker))) {
-    return "swift"
-  }
-  if (/^\s*@(?:MainActor|State|Binding|Environment)/m.test(trimmed)) {
-    return "swift"
-  }
-  return null
-}
-
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -791,6 +746,34 @@ function stripTrailingBlankLines(value: string): string {
   return value.replace(/(?:[ \t]*\n)*[ \t]*$/u, (match) => (match.includes("\n") ? "" : match))
 }
 
+function isInternalHost(hostname: string): boolean {
+  const lower = hostname.toLowerCase()
+  return (
+    lower === "stepinto.vision" ||
+    lower.endsWith(".stepinto.vision") ||
+    lower === "stepintovision.ai" ||
+    lower.endsWith(".stepintovision.ai")
+  )
+}
+
+function inferReferenceRole(hostname: string): StepIntoVisionReferenceRole {
+  const lower = hostname.toLowerCase()
+  if (lower.includes("developer.apple.com") || lower.includes("docs.swift.org")) {
+    return "docs"
+  }
+  if (lower.includes("forums.developer.apple.com")) {
+    return "discussion"
+  }
+  if (
+    lower.includes("youtube.com") ||
+    lower.includes("youtu.be") ||
+    lower.includes("vimeo.com")
+  ) {
+    return "video"
+  }
+  return "article"
+}
+
 function collectReferenceLinks($: ReturnType<typeof load>): StepIntoVisionSeeAlsoItem[] {
   const links: StepIntoVisionSeeAlsoItem[] = []
 
@@ -799,6 +782,7 @@ function collectReferenceLinks($: ReturnType<typeof load>): StepIntoVisionSeeAls
     if (!href) {
       return
     }
+
     const normalizedHref = cleanUrl(href)
     if (!normalizedHref) {
       return
@@ -811,12 +795,25 @@ function collectReferenceLinks($: ReturnType<typeof load>): StepIntoVisionSeeAls
       hostname = null
     }
 
-    if (!hostname || !isReferenceHost(hostname)) {
+    if (!hostname || isInternalHost(hostname)) {
       return
     }
 
     const title = $(element).text().trim() || normalizedHref
-    links.push({ title, url: normalizedHref })
+    const linkRole = determineLinkRole(hostname, normalizedHref)
+
+    if (linkRole === "repo" || linkRole === "download" || linkRole === "series" || linkRole === "asset" || linkRole === "video") {
+      return
+    }
+
+    let role: StepIntoVisionReferenceRole
+    if (linkRole === "docs" || linkRole === "discussion") {
+      role = linkRole
+    } else {
+      role = inferReferenceRole(hostname)
+    }
+
+    links.push({ title, url: normalizedHref, role })
   })
 
   return dedupeSeeAlso(links)
@@ -829,7 +826,7 @@ function augmentReferencesWithApiMentions(
   const matches: StepIntoVisionSeeAlsoItem[] = []
   for (const candidate of API_REFERENCE_PATTERNS) {
     if (candidate.pattern.test(markdown)) {
-      matches.push({ title: candidate.title, url: candidate.url })
+      matches.push({ title: candidate.title, url: candidate.url, role: "docs" })
     }
   }
 
@@ -844,7 +841,7 @@ function dedupeSeeAlso(items: StepIntoVisionSeeAlsoItem[]): StepIntoVisionSeeAls
   const seen = new Set<string>()
   const result: StepIntoVisionSeeAlsoItem[] = []
   for (const item of items) {
-    const key = `${item.title}|${item.url}`
+    const key = `${item.title}|${item.url}|${item.role ?? ""}`
     if (!seen.has(key)) {
       seen.add(key)
       result.push(item)
@@ -873,19 +870,59 @@ function filterLinksAgainstReferences(
   if (references.length === 0) {
     return links
   }
-  const referenceUrls = new Set(references.map((reference) => reference.url))
-  return links.filter((link) => !(referenceUrls.has(link.url) && link.role === "docs"))
-}
+  const referenceRoles = new Map<string, Set<string>>()
+  for (const reference of references) {
+    const roles = referenceRoles.get(reference.url) ?? new Set<string>()
+    roles.add(reference.role ?? "")
+    referenceRoles.set(reference.url, roles)
+  }
 
-function isReferenceHost(hostname: string): boolean {
-  return REFERENCE_HOSTS.some((allowed) =>
-    hostname === allowed || hostname.endsWith(`.${allowed}`),
-  )
+  return links.filter((link) => {
+    const roles = referenceRoles.get(link.url)
+    if (!roles) {
+      return true
+    }
+    if (roles.has("")) {
+      return false
+    }
+    return !roles.has(link.role)
+  })
 }
 
 function parseDimension(value: string): number | null {
   const numeric = Number.parseInt(value, 10)
   return Number.isNaN(numeric) ? null : numeric
+}
+
+function determineLinkRole(
+  hostname: string,
+  href: string,
+): StepIntoVisionLinkRole | null {
+  const lowerHost = hostname.toLowerCase()
+  const lowerHref = href.toLowerCase()
+
+  if (lowerHost.includes("github.com")) {
+    return lowerHref.endsWith(".zip") || lowerHref.includes("/archive/")
+      ? "download"
+      : "repo"
+  }
+  if (lowerHost.includes("forums.developer.apple.com")) {
+    return "discussion"
+  }
+  if (lowerHost.includes("developer.apple.com")) {
+    return "docs"
+  }
+  if (lowerHost.includes("youtube.com") || lowerHost.includes("youtu.be")) {
+    return "video"
+  }
+  if (lowerHost.includes("opengameart.org")) {
+    return "asset"
+  }
+  if (lowerHost.endsWith("stepinto.vision") && lowerHref.includes("/learn-visionos")) {
+    return "series"
+  }
+
+  return null
 }
 
 function collectDeveloperLinks($: ReturnType<typeof load>): StepIntoVisionLink[] {
@@ -913,24 +950,11 @@ function collectDeveloperLinks($: ReturnType<typeof load>): StepIntoVisionLink[]
       return
     }
 
-    const lowerHref = normalizedHref.toLowerCase()
     const text = $(element).text().trim()
     const title = text || normalizedHref
 
-    let role: StepIntoVisionLinkRole | null = null
-    if (hostname.includes("github.com")) {
-      role = lowerHref.endsWith(".zip") || lowerHref.includes("/archive/") ? "download" : "repo"
-    } else if (hostname.includes("forums.developer.apple.com")) {
-      role = "discussion"
-    } else if (hostname.includes("developer.apple.com")) {
-      role = "docs"
-    } else if (hostname.includes("youtube.com") || hostname.includes("youtu.be")) {
-      role = "video"
-    } else if (hostname.endsWith("stepinto.vision") && lowerHref.includes("/learn-visionos")) {
-      role = "series"
-    }
-
-    if (!role) {
+    const role = determineLinkRole(hostname, normalizedHref)
+    if (!role || role === "asset") {
       return
     }
 
