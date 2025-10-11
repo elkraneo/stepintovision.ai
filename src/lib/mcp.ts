@@ -32,7 +32,7 @@ function buildMetaName(post: StepIntoVisionPost): string {
   return `${post.slug}.meta.json`
 }
 
-function buildResourceMeta(post: StepIntoVisionPost): Record<string, unknown> {
+export function buildResourceMeta(post: StepIntoVisionPost): Record<string, unknown> {
   const markdownUri = buildResourceUri(post)
   return {
     schema: "mcp.post.v1",
@@ -52,7 +52,7 @@ function buildResourceMeta(post: StepIntoVisionPost): Record<string, unknown> {
   }
 }
 
-function buildResourceItem(post: StepIntoVisionPost) {
+export function buildResourceItem(post: StepIntoVisionPost) {
   return {
     uri: buildResourceUri(post),
     name: buildMarkdownName(post),
@@ -68,7 +68,7 @@ function buildResourceItem(post: StepIntoVisionPost) {
   }
 }
 
-function buildMetaDocument(post: StepIntoVisionPost): StepIntoVisionPostMetaDocument {
+export function buildMetaDocument(post: StepIntoVisionPost): StepIntoVisionPostMetaDocument {
   const markdownUri = buildResourceUri(post)
   const meta: StepIntoVisionPostMetaDocument = {
     schema: "mcp.post.v1",
@@ -125,7 +125,7 @@ function buildMetaDocument(post: StepIntoVisionPost): StepIntoVisionPostMetaDocu
   return meta
 }
 
-function buildMetaResourceItem(post: StepIntoVisionPost) {
+export function buildMetaResourceItem(post: StepIntoVisionPost) {
   const metaDocument = buildMetaDocument(post)
   return {
     uri: buildMetaUri(post),

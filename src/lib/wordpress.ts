@@ -434,6 +434,7 @@ function applyGrammarFixesToProse(value: string): string {
   return value
     .replace(/ways to values convert/gi, "ways to convert values")
     .replace(/\bxtension\b/gi, "extension")
+    .replace(/USD\s+(or\s+`?\.reality`?)/gi, (_match, suffix) => `USDZ ${suffix}`)
     .replace(/\bThis use\b/gi, (match) =>
       match[0] === "T" ? "This uses" : "this uses",
     )

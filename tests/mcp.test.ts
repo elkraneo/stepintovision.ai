@@ -1,0 +1,87 @@
+import { describe, expect, it } from "vitest"
+
+import { buildMetaResourceItem, buildResourceItem } from "../src/lib/mcp"
+import { normalizeWordPressPost } from "../src/lib/wordpress"
+
+function createSampleWordPressPost() {
+  return {
+    id: 101,
+    slug: "spatial-swiftui-model3d",
+    link: "https://stepinto.vision/example-code/spatial-swiftui-model3d/",
+    date: "2025-02-25T13:46:46",
+    modified: "2025-02-25T13:46:46",
+    title: { rendered: "Spatial SwiftUI: Model3D" },
+    excerpt: {
+      rendered:
+        "<p>Model3D is a simple view that can load a USD or `.reality` file.</p>",
+    },
+    content: {
+      rendered: `
+        <p>Model3D is a simple view that can load a USD or <code>.reality</code> file.</p>
+        <pre><code class="language-swift">Model3D(named: "Earth")</code></pre>
+      `,
+    },
+    _embedded: {
+      "wp:term": [
+        [
+          { taxonomy: "category", name: "Example Code" },
+          { taxonomy: "category", name: "Spatial" },
+        ],
+        [
+          { taxonomy: "post_tag", name: "RealityKit" },
+        ],
+      ],
+      "wp:featuredmedia": [
+        {
+          source_url: "https://stepinto.vision/wp-content/uploads/model3d.jpg",
+          alt_text: "Model3D hero",
+          media_details: { width: 1600, height: 900 },
+        },
+      ],
+      author: [
+        {
+          name: "Joseph Simpson",
+        },
+      ],
+    },
+  }
+}
+
+describe("MCP resource metadata", () => {
+  it("includes code metadata and canonical fields on markdown resources", () => {
+    const post = normalizeWordPressPost(createSampleWordPressPost() as never)
+    const resource = buildResourceItem(post)
+
+    const isoUpdatedAt = new Date(post.updatedAt).toISOString()
+
+    expect(resource.annotations?.lastModified).toBe(isoUpdatedAt)
+    const meta = resource._meta as Record<string, unknown>
+
+    expect(meta).toBeDefined()
+    expect(meta).toMatchObject({
+      canonicalUrl: post.link,
+      author: { name: post.author },
+      metaUri: `stepintovision://post/${post.slug}/meta`,
+      code: {
+        policy: "verbatim",
+      },
+    })
+    const codeMeta = (meta.code ?? {}) as { blocks?: unknown[] }
+    expect(Array.isArray(codeMeta.blocks)).toBe(true)
+    expect(codeMeta.blocks?.length ?? 0).toBeGreaterThan(0)
+  })
+
+  it("propagates freshness metadata on JSON companions", () => {
+    const post = normalizeWordPressPost(createSampleWordPressPost() as never)
+    const metaResource = buildMetaResourceItem(post)
+
+    const isoUpdatedAt = new Date(post.updatedAt).toISOString()
+
+    expect(metaResource.annotations?.lastModified).toBe(isoUpdatedAt)
+    expect(metaResource._meta).toMatchObject({
+      canonicalUrl: post.link,
+      markdownUri: `stepintovision://post/${post.slug}`,
+    })
+  })
+})
+

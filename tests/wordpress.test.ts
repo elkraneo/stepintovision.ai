@@ -18,7 +18,10 @@ describe("normalizeWordPressPost", () => {
       date: "2024-03-01T00:00:00",
       modified: "2024-03-02T00:00:00",
       title: { rendered: "Example &amp; Test" },
-      excerpt: { rendered: "<p>Summary with <strong>HTML</strong> that provides several ways to values convert</p>" },
+      excerpt: {
+        rendered:
+          "<p>Summary with <strong>HTML</strong> that provides several ways to values convert.</p><p>Model3D is a simple view that can load a USD or `.reality` file.</p>",
+      },
       content: {
         rendered: `
           <p>Main content</p>
@@ -83,6 +86,7 @@ describe("normalizeWordPressPost", () => {
     expect(post.contentHtml).not.toContain("<script")
     expect(post.contentMarkdown).toContain("```swift")
     expect(post.contentMarkdown).toContain("struct Example: View {}")
+    expect(post.contentMarkdown).not.toContain("USD or")
     expect(post.contentText).toContain("Main content")
     expect(post.seeAlso).toEqual([
       { title: "Example 1", url: "https://stepinto.vision/example-1/" },
@@ -120,6 +124,7 @@ describe("normalizeWordPressPost", () => {
     expect(post.license).toBe("AllRightsReserved")
     expect(post.contentDigest).toMatch(/^sha256-/)
     expect(post.excerpt).toContain("ways to convert values")
+    expect(post.excerpt).toContain("USDZ or `.reality`")
     expect(post.wordCount).toBeGreaterThan(0)
     expect(post.tokenCount).toBeGreaterThan(0)
     expect(post.readingTimeSeconds).toBeGreaterThanOrEqual(30)
