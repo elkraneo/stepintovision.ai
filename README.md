@@ -116,16 +116,17 @@ Each Markdown resource includes `_meta` fields with:
 - Identity: `schema`, `canonicalUrl`, `markdownUri`, `metaUri`, `mcpResource`.
 - Provenance: ISO-8601 `publishedAt`, `updatedAt`, author, license, version,
   and SHA-256 `contentDigest`.
-- Format hints: locale, `contentType`, `wordCount`, `tokenCount`,
-  `readingTimeSeconds`.
+- Format hints: locale, `summary` (from the post excerpt), `contentType`,
+  `wordCount`, `tokenCount`, `readingTimeSeconds`.
 - Normalization flags: `normalized` is `true` when the article body has been
   grammar-fixed or deduplicated; `verbatim` remains `false` for the curated
   Markdown we serve.
-- Taxonomy & relations: categories, tags, hero image metadata, additional
-  inline media, `seeAlso`, developer-focused links (e.g., GitHub repository and
-  download URLs), `alternateUrls.aiReadable`, and provenance fields for
-  downloadable labs and art assets (`repoIndexUrl`, `downloadUrl`,
-  `videoUrl`, `assetSourceUrl`, `assetAuthor`, `assetLicense`).
+- Relationships & references: categories, tags, hero image metadata, additional
+  inline media, `seeAlso`, machine-friendly `references` (Apple documentation,
+  etc.), developer-focused links (e.g., GitHub repository and download URLs),
+  `alternateUrls.aiReadable`, and provenance fields for downloadable labs and
+  art assets (`repoIndexUrl`, `downloadUrl`, `videoUrl`, `assetSourceUrl`,
+  `assetAuthor`, `assetLicense`).
 
 The JSON metadata companion exposes the same information plus the `schema`
 version in a machine-friendly document. The Markdown body continues to be

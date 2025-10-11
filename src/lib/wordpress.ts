@@ -43,20 +43,30 @@ interface WordPressMedia {
   media_details?: WordPressMediaDetails
 }
 
+interface WordPressAuthor {
+  name?: string
+}
+
+interface WordPressEmbedded {
+  [key: string]: unknown
+  "wp:term"?: WordPressEmbeddedTerm[][]
+  "wp:featuredmedia"?: WordPressMedia[]
+  author?: WordPressAuthor[]
+}
+
 interface WordPressPost {
   id: number
   slug: string
   link: string
   date: string
   modified: string
+  author?: number
   title: WordPressRenderedField
   excerpt: WordPressRenderedField
   content: WordPressRenderedField
   categories?: number[]
   tags?: number[]
-  _embedded?: {
-    [key: string]: Array<WordPressEmbeddedTerm[] | WordPressMedia[]>
-  }
+  _embedded?: WordPressEmbedded
 }
 
 const DEFAULT_BASE_URL = "https://stepinto.vision"
@@ -70,6 +80,8 @@ const turndown = new TurndownService({
   headingStyle: "atx",
 })
 turndown.use(gfm)
+
+const REFERENCE_HOSTS = ["developer.apple.com", "docs.swift.org"]
 
 function buildWordPressPostsUrl(baseUrl: string): URL {
   const trimmed = baseUrl.trim()
@@ -234,6 +246,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
   const contentText = prepared.text
   const seeAlso = prepared.seeAlso
   const developerLinks = prepared.developerLinks
+  const references = prepared.references
   const mediaItems = prepared.media
   const repoUrl = prepared.repoUrl
   const downloadUrl = prepared.downloadUrl
@@ -242,6 +255,7 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
   const assetAuthor = prepared.assetAuthor
   const assetLicense = inferAssetLicense(assetSourceUrl, prepared.assetLicense)
   const media = buildMediaList(heroImage, mediaItems)
+  const authorName = extractAuthorName(post)
   const wordCount = contentText.split(/\s+/).filter(Boolean).length
   const tokenCount = Math.max(1, Math.round(wordCount * 1.3))
   const readingTimeSeconds = Math.max(30, Math.round((wordCount / 200) * 60))
@@ -278,13 +292,14 @@ export function normalizeWordPressPost(post: WordPressPost): StepIntoVisionPost 
     heroImage,
     media,
     locale: DEFAULT_LOCALE,
-    author: DEFAULT_AUTHOR,
+    author: authorName,
     license: DEFAULT_LICENSE,
     version: 1,
     normalized: true,
     verbatim: false,
     seeAlso,
     developerLinks,
+    references,
     contentDigest: `sha256-${contentDigest}`,
     repoUrl,
     downloadUrl,
@@ -382,7 +397,9 @@ function normalizeHeroImage(media?: WordPressMedia): StepIntoVisionMedia | null 
 }
 
 function fixCommonGrammar(value: string): string {
-  return value.replace(/ways to values convert/gi, "ways to convert values")
+  return value
+    .replace(/ways to values convert/gi, "ways to convert values")
+    .replace(/\bxtension\b/gi, "extension")
 }
 
 interface PreparedContent {
@@ -391,6 +408,7 @@ interface PreparedContent {
   text: string
   seeAlso: StepIntoVisionSeeAlsoItem[]
   developerLinks: StepIntoVisionSeeAlsoItem[]
+  references: StepIntoVisionSeeAlsoItem[]
   media: StepIntoVisionMedia[]
   repoUrl: string | null
   downloadUrl: string | null
@@ -440,6 +458,7 @@ function prepareContent(rawHtml: string): PreparedContent {
       $(element).remove()
       return
     }
+    codeText = fixCommonGrammar(codeText)
     let language = inferCodeLanguage(codeText)
     if (!language) {
       const codeElement = $(element).find("code").first()
@@ -539,6 +558,7 @@ function prepareContent(rawHtml: string): PreparedContent {
     }
   })
 
+  const references = collectReferenceLinks($)
   const developerData = collectDeveloperLinks($)
   const assetData = collectAssetMetadata($)
   const videoUrl = collectVideoUrl($)
@@ -568,6 +588,7 @@ function prepareContent(rawHtml: string): PreparedContent {
     text,
     seeAlso: dedupeSeeAlso(seeAlsoItems),
     developerLinks: developerData.links,
+    references,
     media: dedupeMedia(mediaItems),
     repoUrl: developerData.repoUrl,
     downloadUrl: developerData.downloadUrl,
@@ -590,10 +611,31 @@ function inferCodeLanguage(code: string): string | null {
   if (/\bstruct\s+[A-Z]/.test(trimmed) && trimmed.includes(": View")) {
     return "swift"
   }
-  if (/\bfunc\s+[a-zA-Z0-9_]+\s*\(/.test(trimmed) && trimmed.includes("->")) {
+  if (/^\s*(extension|xtension)\s+[A-Z]/m.test(trimmed)) {
+    return "swift"
+  }
+  if (/\bfunc\s+[a-zA-Z0-9_]+\s*\(/.test(trimmed)) {
     return "swift"
   }
   if (/class\s+[A-Z]/.test(trimmed) && trimmed.includes("NSObject")) {
+    return "swift"
+  }
+  if (/^\s*(var|let)\s+[A-Za-z0-9_]+\s*:\s*[A-Z]/m.test(trimmed)) {
+    return "swift"
+  }
+  const swiftMarkers = [
+    "spatialOverlay",
+    "glassBackgroundDisplayMode",
+    "Edge3D.",
+    "rotation3DLayout",
+    "ModelViewSimple",
+    "RealityView",
+    "RealityViewContent",
+  ]
+  if (swiftMarkers.some((marker) => trimmed.includes(marker))) {
+    return "swift"
+  }
+  if (/^\s*@(?:MainActor|State|Binding|Environment)/m.test(trimmed)) {
     return "swift"
   }
   return null
@@ -631,6 +673,37 @@ function ensureSwiftImports(code: string): string {
   return `${imports.join("\n")}\n\n${result}`
 }
 
+function collectReferenceLinks($: ReturnType<typeof load>): StepIntoVisionSeeAlsoItem[] {
+  const links: StepIntoVisionSeeAlsoItem[] = []
+
+  $("a[href]").each((_, element) => {
+    const href = $(element).attr("href")?.trim()
+    if (!href) {
+      return
+    }
+    const normalizedHref = cleanUrl(href)
+    if (!normalizedHref) {
+      return
+    }
+
+    let hostname: string | null = null
+    try {
+      hostname = new URL(normalizedHref).hostname.toLowerCase()
+    } catch {
+      hostname = null
+    }
+
+    if (!hostname || !isReferenceHost(hostname)) {
+      return
+    }
+
+    const title = $(element).text().trim() || normalizedHref
+    links.push({ title, url: normalizedHref })
+  })
+
+  return dedupeSeeAlso(links)
+}
+
 function dedupeSeeAlso(items: StepIntoVisionSeeAlsoItem[]): StepIntoVisionSeeAlsoItem[] {
   const seen = new Set<string>()
   const result: StepIntoVisionSeeAlsoItem[] = []
@@ -642,6 +715,12 @@ function dedupeSeeAlso(items: StepIntoVisionSeeAlsoItem[]): StepIntoVisionSeeAls
     }
   }
   return result
+}
+
+function isReferenceHost(hostname: string): boolean {
+  return REFERENCE_HOSTS.some((allowed) =>
+    hostname === allowed || hostname.endsWith(`.${allowed}`),
+  )
 }
 
 function parseDimension(value: string): number | null {
@@ -747,6 +826,21 @@ function collectVideoUrl($: ReturnType<typeof load>): string | null {
   }
   const normalized = cleanUrl(src)
   return normalized ?? src
+}
+
+function extractAuthorName(post: WordPressPost): string {
+  const embeddedAuthors = Array.isArray(post._embedded?.author)
+    ? (post._embedded?.author as WordPressAuthor[])
+    : []
+
+  for (const author of embeddedAuthors) {
+    const name = author?.name?.trim()
+    if (name) {
+      return name
+    }
+  }
+
+  return DEFAULT_AUTHOR
 }
 
 function dedupeMedia(items: StepIntoVisionMedia[]): StepIntoVisionMedia[] {

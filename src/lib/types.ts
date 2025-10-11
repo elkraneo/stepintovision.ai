@@ -38,6 +38,7 @@ export interface StepIntoVisionPost {
   verbatim: boolean
   seeAlso: StepIntoVisionSeeAlsoItem[]
   developerLinks: StepIntoVisionSeeAlsoItem[]
+  references: StepIntoVisionSeeAlsoItem[]
   contentDigest: string
   media: StepIntoVisionMedia[]
   repoUrl?: string | null
@@ -58,6 +59,7 @@ export interface StepIntoVisionPostMetaDocument {
   canonicalUrl: string
   markdownUri: string
   mcpResource: string
+  summary: string
   publishedAt: string
   updatedAt: string
   categories: string[]
@@ -75,6 +77,7 @@ export interface StepIntoVisionPostMetaDocument {
   media: StepIntoVisionMedia[]
   seeAlso: StepIntoVisionSeeAlsoItem[]
   developerLinks: StepIntoVisionSeeAlsoItem[]
+  references: StepIntoVisionSeeAlsoItem[]
   contentDigest: string
   repoUrl?: string | null
   downloadUrl?: string | null

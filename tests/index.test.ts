@@ -42,6 +42,7 @@ beforeAll(async () => {
         verbatim: false,
         seeAlso: [],
         developerLinks: [],
+        references: [],
         contentDigest: "sha256-test",
         media: [],
       },

@@ -24,6 +24,7 @@ describe("normalizeWordPressPost", () => {
             <textarea class="code-block-pro-copy-button-textarea">struct Example: View {}</textarea>
             <pre class="shiki light-plus"><code class="language-swift"><span class="line">struct Example: View {}</span></code></pre>
           </div>
+          <p>For background, see <a href="https://developer.apple.com/documentation/swiftui/edge3d/set">Edge3D.Set</a>.</p>
           <p>We’ll use this <a href="https://opengameart.org/content/a-bird-animation">blue bird</a> image from OpenGameArt, thanks to <strong><a href="https://opengameart.org/users/komiro100">komiro100</a></strong> (CC0).</p>
           <p>See also</p>
           <ul class="wp-block-list">
@@ -53,6 +54,11 @@ describe("normalizeWordPressPost", () => {
             source_url: "https://stepinto.vision/wp-content/uploads/example.jpg?resize=1600",
             alt_text: "Hero diagram",
             media_details: { width: 1600, height: 900 },
+          },
+        ],
+        author: [
+          {
+            name: "Joseph Simpson",
           },
         ],
       },
@@ -87,7 +93,14 @@ describe("normalizeWordPressPost", () => {
         url: "https://github.com/stepintovision/realitykit-sample/archive/refs/heads/main.zip",
       },
     ])
+    expect(post.references).toEqual([
+      {
+        title: "Edge3D.Set",
+        url: "https://developer.apple.com/documentation/swiftui/edge3d/set",
+      },
+    ])
     expect(post.locale).toBe("en")
+    expect(post.author).toBe("Joseph Simpson")
     expect(post.license).toBe("All rights reserved")
     expect(post.contentDigest).toMatch(/^sha256-/)
     expect(post.excerpt).toContain("ways to convert values")
@@ -127,6 +140,7 @@ describe("normalizeWordPressPost", () => {
     expect(post.videoUrl).toBe("https://player.vimeo.com/video/example")
     expect(post.normalized).toBe(true)
     expect(post.verbatim).toBe(false)
+    expect(post.contentMarkdown).not.toContain("xtension")
   })
 
   it("falls back to numeric taxonomy IDs when embedded terms are absent", () => {
@@ -148,6 +162,7 @@ describe("normalizeWordPressPost", () => {
     expect(post.categories).toEqual(["1", "2"])
     expect(post.tags).toEqual(["3"])
     expect(post.heroImage).toBeNull()
+    expect(post.author).toBe("Step Into Vision")
     expect(post.normalized).toBe(true)
     expect(post.verbatim).toBe(false)
   })
