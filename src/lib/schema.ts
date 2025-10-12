@@ -235,4 +235,4 @@ export function assertValidMetaDocument(meta: StepIntoVisionPostMetaDocument): v
   throw new Error(`Invalid mcp.post.v1 document: ${message}`)
 }
 
-export const metaDocumentSchema = META_SCHEMA as const
+export const metaDocumentSchema = META_SCHEMA

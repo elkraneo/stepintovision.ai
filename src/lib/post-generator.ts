@@ -70,6 +70,14 @@ function canonicalizeUrl(value: string): string {
   }
 }
 
+function canonicalizeJson(value: unknown): string {
+  const result = stringify(value)
+  if (typeof result !== "string") {
+    throw new Error("Failed to serialize value to JSON")
+  }
+  return result
+}
+
 function urlsEqual(a?: string | null, b?: string | null): boolean {
   if (!a || !b) {
     return false
@@ -220,7 +228,7 @@ function normalizeLicense(
 function buildContentDigest(
   base: Omit<StepIntoVisionPostMetaDocument, "contentDigest">,
 ): string {
-  const canonical = stringify(base)
+  const canonical = canonicalizeJson(base)
   const digest = createHash("sha256").update(canonical, "utf8").digest("hex")
   return `sha256-${digest}`
 }
@@ -251,8 +259,10 @@ export function generatePostArtifacts(
     blocks: codeBlocks,
   }
 
-  const normalized = json.normalized ?? (json.normalizedScope === "prose") ?? false
-  const normalizedScope = json.normalizedScope ?? (normalized ? "prose" : "none")
+  const normalized =
+    typeof json.normalized === "boolean" ? json.normalized : json.normalizedScope === "prose"
+  const normalizedScope =
+    json.normalizedScope ?? (normalized ? "prose" : "none")
   const verbatim = json.verbatim ?? true
 
   const mcpResource =

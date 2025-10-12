@@ -6,6 +6,7 @@ import stringify from "json-stable-stringify"
 import { z } from "zod"
 
 import { getPostById, getPostBySlug, listPosts, searchPosts } from "./catalog"
+import type { CatalogLoader } from "./catalog-loader"
 import { buildRenderedPostMarkdown, renderPostMarkdown } from "./markdown"
 import { extractKeywordCandidates, tokenizeKeywordText } from "./markdown-utils"
 import type { RenderedPostMarkdown } from "./markdown"
@@ -14,6 +15,60 @@ import { assertValidMetaDocument } from "./schema"
 
 const MARKDOWN_MIME_TYPE = "text/markdown"
 const JSON_MIME_TYPE = "application/json"
+
+function canonicalizeJson(value: unknown): string {
+  const result = stringify(value)
+  if (typeof result !== "string") {
+    throw new Error("Failed to serialize value to JSON")
+  }
+  return result
+}
+
+const resourceAnnotationsSchema = z.object({
+  audience: z.array(z.string()),
+  priority: z.number(),
+  lastModified: z.string(),
+})
+
+const resourceSchema = z.object({
+  uri: z.string(),
+  name: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  mimeType: z.string(),
+  annotations: resourceAnnotationsSchema.optional(),
+  _meta: z.record(z.unknown()).optional(),
+})
+
+const searchHitOutputSchema = z.object({
+  id: z.number(),
+  slug: z.string(),
+  title: z.string(),
+  excerpt: z.string(),
+  publishedAt: z.string(),
+  link: z.string(),
+  score: z.number(),
+  resource: resourceSchema.optional(),
+})
+
+const listPostsOutputSchema: z.ZodRawShape = {
+  resources: z.array(resourceSchema),
+}
+
+const getPostOutputSchema: z.ZodRawShape = {
+  resource: resourceSchema,
+  metaResource: resourceSchema,
+  text: z.string().optional(),
+  html: z.string().optional(),
+}
+
+const searchPostsOutputSchema: z.ZodRawShape = {
+  query: z.string(),
+  hits: z.array(searchHitOutputSchema),
+  resources: z.array(resourceSchema),
+}
+
+type LoadPostsFn = (CatalogLoader | (() => Promise<StepIntoVisionPost[]>))
 
 function toIsoString(value: string): string {
   const date = new Date(value)
@@ -55,7 +110,7 @@ function ensureContentDigest(post: StepIntoVisionPost, rendered: RenderedPostMar
 function computeMetaDocumentDigest(
   meta: Omit<StepIntoVisionPostMetaDocument, "contentDigest">,
 ): string {
-  const canonical = stringify(meta)
+  const canonical = canonicalizeJson(meta)
   const hash = createHash("sha256").update(canonical, "utf8").digest("hex")
   return `sha256-${hash}`
 }
@@ -96,7 +151,7 @@ function buildKeywords(post: StepIntoVisionPost, rendered: RenderedPostMarkdown)
       }
       return a[0].localeCompare(b[0])
     })
-    .slice(0, 12)
+    .slice(0, 8)
     .map(([token]) => token)
 
   return sorted
@@ -247,11 +302,27 @@ export function buildMetaResourceItem(post: StepIntoVisionPost, options: BuildOp
   }
 }
 
-export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) {
+export function createMcpServer(loadPosts: LoadPostsFn) {
   const server = new McpServer({
     name: "stepintovision.ai",
     version: "1.0.0",
   })
+
+  const loaderWithSubscribe = loadPosts as CatalogLoader
+  let unsubscribeFromCatalog: (() => void) | undefined
+
+  if (typeof loaderWithSubscribe.subscribe === "function") {
+    unsubscribeFromCatalog = loaderWithSubscribe.subscribe(() => {
+      if (server.isConnected()) {
+        server.sendResourceListChanged()
+      }
+    })
+    const originalClose = server.close.bind(server)
+    server.close = async () => {
+      unsubscribeFromCatalog?.()
+      await originalClose()
+    }
+  }
 
   const completeSlug = async (value: string) => {
     const posts = await loadPosts()
@@ -262,6 +333,12 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
   }
 
   const postTemplate = new ResourceTemplate("stepintovision://post/{slug}", {
+    list: async () => {
+      const posts = await loadPosts()
+      return {
+        resources: posts.map((post) => buildResourceItem(post)),
+      }
+    },
     complete: {
       slug: completeSlug,
     },
@@ -310,6 +387,12 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
   )
 
   const metaTemplate = new ResourceTemplate("stepintovision://post/{slug}/meta", {
+    list: async () => {
+      const posts = await loadPosts()
+      return {
+        resources: posts.map((post) => buildMetaResourceItem(post)),
+      }
+    },
     complete: {
       slug: completeSlug,
     },
@@ -374,6 +457,7 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
         category: z.string().optional(),
         tag: z.string().optional(),
       },
+      outputSchema: listPostsOutputSchema,
     },
     async ({ limit = 10, offset = 0, category, tag }) => {
       const posts = await loadPosts()
@@ -410,6 +494,7 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
         includeHtml: z.boolean().default(false),
         includeText: z.boolean().default(true),
       },
+      outputSchema: getPostOutputSchema,
     },
     async ({ slug, id, includeHtml = false, includeText = true }) => {
       if (!slug && typeof id !== "number") {
@@ -420,6 +505,7 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
               text: "Either slug or id must be provided.",
             },
           ],
+          isError: true,
         }
       }
 
@@ -434,6 +520,7 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
               text: "Post not found.",
             },
           ],
+          isError: true,
         }
       }
 
@@ -480,6 +567,7 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
         query: z.string(),
         limit: z.number().min(1).max(25).default(10),
       },
+      outputSchema: searchPostsOutputSchema,
     },
     async ({ query, limit = 10 }) => {
       const posts = await loadPosts()

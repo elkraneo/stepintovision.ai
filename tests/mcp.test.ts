@@ -175,7 +175,7 @@ describe("MCP resource metadata", () => {
     const markdownTemplate = templates.stepIntoVisionPost
     expect(markdownTemplate).toBeDefined()
 
-    expect(markdownTemplate.resourceTemplate.listCallback).toBeUndefined()
+    expect(typeof markdownTemplate.resourceTemplate.listCallback).toBe("function")
 
     const resourceUri = `stepintovision://post/${post.slug}`
     const readResult = (await markdownTemplate.readCallback(new URL(resourceUri), {
@@ -198,4 +198,3 @@ describe("MCP resource metadata", () => {
     expect(codeBlocks.length).toBeGreaterThan(0)
   })
 })
-

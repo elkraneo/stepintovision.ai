@@ -1,6 +1,6 @@
 import { htmlToText } from "html-to-text"
 import { load } from "cheerio"
-import type { Element } from "cheerio"
+import type { Element } from "domhandler"
 import TurndownService from "turndown"
 import { gfm } from "turndown-plugin-gfm"
 
@@ -1172,6 +1172,27 @@ function parseAsOfDate(text: string, fallback?: string): string | undefined {
     }
   }
 
+  const monthDayParts = text.match(/As of\s+([A-Za-z]+)\s+(\d{1,2}),?\s*(\d{4})/i)
+  if (monthDayParts) {
+    const [, monthNameRaw, dayRaw, yearRaw] = monthDayParts
+    const monthName = monthNameRaw.toLowerCase()
+    const monthIndex = MONTH_LOOKUP[monthName as keyof typeof MONTH_LOOKUP]
+    const day = Number.parseInt(dayRaw, 10)
+    const year = Number.parseInt(yearRaw, 10)
+    if (
+      typeof monthIndex === "number" &&
+      Number.isInteger(day) &&
+      day >= 1 &&
+      day <= 31 &&
+      Number.isInteger(year)
+    ) {
+      const parsed = new Date(Date.UTC(year, monthIndex, day))
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString()
+      }
+    }
+  }
+
   const monthDayMatch = text.match(/As of\s+([A-Za-z]+\s+\d{1,2},?\s*\d{4})/i)
   if (monthDayMatch) {
     const parsed = new Date(monthDayMatch[1])
@@ -1217,26 +1238,30 @@ function extractStatus(
     return false
   })
 
-  if (!note) {
+  const noteText = note
+
+  if (!noteText) {
     return null
   }
+
+  const ensuredNote: string = noteText
 
   const status: StepIntoVisionStatus = {
     type: "limitation",
     stability: "likely_to_change",
-    note,
+    note: ensuredNote,
   }
 
-  if (/visionos/i.test(note)) {
-    const versionMatch = note.match(/visionos\s*([0-9][0-9.]*)/i)
-    const appliesTo = { product: "visionOS" as const }
+  if (/visionos/i.test(ensuredNote)) {
+    const versionMatch = ensuredNote.match(/visionos\s*([0-9][0-9.]*)/i)
+    const appliesTo: StepIntoVisionStatus["appliesTo"] = { product: "visionOS" }
     if (versionMatch) {
       appliesTo.versions = [normalizeVersion(versionMatch[1])]
     }
     status.appliesTo = appliesTo
   }
 
-  const asOf = parseAsOfDate(note, context.updatedAt ?? context.publishedAt)
+  const asOf = parseAsOfDate(ensuredNote, context.updatedAt ?? context.publishedAt)
   if (asOf) {
     status.asOf = asOf
   }
