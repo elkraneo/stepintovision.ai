@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { McpError } from "@modelcontextprotocol/sdk/server/index.js"
+import { McpError } from "@modelcontextprotocol/sdk/types.js"
 import stringify from "json-stable-stringify"
 import { z } from "zod"
 
