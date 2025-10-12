@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"
+import { McpError } from "@modelcontextprotocol/sdk/server/index.js"
 import stringify from "json-stable-stringify"
 import { z } from "zod"
 
@@ -232,6 +233,7 @@ export function buildMetaResourceItem(post: StepIntoVisionPost, options: BuildOp
     mimeType: JSON_MIME_TYPE,
     annotations: {
       audience: ["assistant"],
+      priority: 0.7,
       lastModified: metaDocument.updatedAt,
     },
     _meta: {
@@ -260,18 +262,6 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
   }
 
   const postTemplate = new ResourceTemplate("stepintovision://post/{slug}", {
-    list: async () => {
-      const posts = await loadPosts()
-      return {
-        resources: posts.map((post) => {
-          const rendered = buildRenderedPostMarkdown(post)
-          return buildResourceItem(post, { rendered })
-        }),
-        _meta: {
-          total: posts.length,
-        },
-      }
-    },
     complete: {
       slug: completeSlug,
     },
@@ -290,17 +280,11 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
       const post = getPostBySlug(posts, slug.toString())
 
       if (!post) {
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              name: slug.toString(),
-              title: `Missing post: ${slug.toString()}`,
-              mimeType: "text/plain",
-              text: `Post with slug "${slug.toString()}" not found.`,
-            },
-          ],
-        }
+        throw new McpError(
+          -32002,
+          `Resource not found: ${uri.href}`,
+          { uri: uri.href },
+        )
       }
 
       const rendered = buildRenderedPostMarkdown(post)
@@ -313,6 +297,11 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
             title: post.title,
             mimeType: MARKDOWN_MIME_TYPE,
             text: rendered.markdown,
+            annotations: {
+              audience: ["assistant"],
+              priority: 0.8,
+              lastModified: toIsoString(post.updatedAt),
+            },
             _meta: buildResourceMeta(post, { rendered }),
           },
         ],
@@ -321,18 +310,6 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
   )
 
   const metaTemplate = new ResourceTemplate("stepintovision://post/{slug}/meta", {
-    list: async () => {
-      const posts = await loadPosts()
-      return {
-        resources: posts.map((post) => {
-          const rendered = buildRenderedPostMarkdown(post)
-          return buildMetaResourceItem(post, { rendered })
-        }),
-        _meta: {
-          total: posts.length,
-        },
-      }
-    },
     complete: {
       slug: completeSlug,
     },
@@ -351,17 +328,11 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
       const post = getPostBySlug(posts, slug.toString())
 
       if (!post) {
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              name: slug.toString(),
-              title: `Missing post metadata: ${slug.toString()}`,
-              mimeType: "text/plain",
-              text: `Post with slug "${slug.toString()}" not found.`,
-            },
-          ],
-        }
+        throw new McpError(
+          -32002,
+          `Resource not found: ${uri.href}`,
+          { uri: uri.href },
+        )
       }
 
       const rendered = buildRenderedPostMarkdown(post)
@@ -374,6 +345,11 @@ export function createMcpServer(loadPosts: () => Promise<StepIntoVisionPost[]>) 
             title: `${post.title} metadata`,
             mimeType: JSON_MIME_TYPE,
             text: JSON.stringify(metaDocument, null, 2),
+            annotations: {
+              audience: ["assistant"],
+              priority: 0.7,
+              lastModified: metaDocument.updatedAt,
+            },
             _meta: {
               canonicalUrl: metaDocument.canonicalUrl,
               markdownUri: metaDocument.markdownUri,
