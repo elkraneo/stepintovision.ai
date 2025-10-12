@@ -124,7 +124,7 @@ The JSON metadata companion (`stepintovision://post/{slug}/meta`) expands on the
 basics with the complete `mcp.post.v1` document:
 
 - Content facts: `summary`, locale, categories, tags, counters (`wordCount`,
-  `tokenCount`, `readingTimeSeconds`).
+  `readingTimeSeconds`).
 - Relationships: `seeAlso`, API `references`, GitHub `links` (roles include
   `repo`, `download`, and `docs`), and optional `videoUrl`.
 - Media: hero/inline media with meaningful alt text, plus optional asset

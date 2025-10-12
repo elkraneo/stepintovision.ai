@@ -25,7 +25,6 @@ const META_SCHEMA = {
     "license",
     "contentType",
     "wordCount",
-    "tokenCount",
     "readingTimeSeconds",
     "normalized",
     "verbatim",
@@ -81,7 +80,6 @@ const META_SCHEMA = {
     },
     contentType: { const: "text/markdown" },
     wordCount: { type: "integer", minimum: 0 },
-    tokenCount: { type: "integer", minimum: 0 },
     readingTimeSeconds: { type: "integer", minimum: 0 },
     normalized: { type: "boolean" },
     verbatim: { type: "boolean" },
@@ -180,7 +178,7 @@ const META_SCHEMA = {
     keywords: {
       type: "array",
       items: { type: "string" },
-      maxItems: 12,
+      maxItems: 8,
     },
     status: {
       type: "object",

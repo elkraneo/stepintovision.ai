@@ -154,7 +154,6 @@ export interface StepIntoVisionPostMetaDocument {
   license: StepIntoVisionLicense
   contentType: "text/markdown"
   wordCount: number
-  tokenCount: number
   readingTimeSeconds: number
   normalized: boolean
   verbatim: boolean

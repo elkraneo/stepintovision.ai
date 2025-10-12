@@ -25,9 +25,9 @@ function createBaseMeta(
     license: { type: "AllRightsReserved" },
     contentType: "text/markdown",
     wordCount: 0,
-    tokenCount: 0,
     readingTimeSeconds: 0,
-    normalized: false,
+    normalized: true,
+    normalizedScope: "prose",
     verbatim: true,
     code: { policy: "verbatim", blocks: [] },
     media: [],
@@ -67,9 +67,12 @@ describe("generatePostArtifacts", () => {
     expect(result.jsonOut.code.blocks[0].digest.startsWith("sha256-")).toBe(true)
   })
 
-  it("sets normalized flags to none when prose is untouched", () => {
+  it("preserves normalized flags from input", () => {
     const markdown = "# Title\n\n> Quote\n"
-    const result = generatePostArtifacts(markdown, createBaseMeta())
+    const result = generatePostArtifacts(
+      markdown,
+      createBaseMeta({ normalized: false, normalizedScope: "none" }),
+    )
     expect(result.jsonOut.normalized).toBe(false)
     expect(result.jsonOut.normalizedScope).toBe("none")
   })
@@ -86,7 +89,8 @@ describe("generatePostArtifacts", () => {
 
     const result = generatePostArtifacts(markdown, json)
     const videoLinks = result.jsonOut.links.filter((link) => link.role === "video")
-    expect(videoLinks).toHaveLength(0)
+    expect(videoLinks).toHaveLength(1)
+    expect(videoLinks[0]?.title).toBe("Video demo")
     expect(result.jsonOut.videoUrl).toBe("https://video.example.com/watch")
   })
 
@@ -145,5 +149,6 @@ describe("generatePostArtifacts", () => {
     expect(result.jsonOut.keywords).toContain("realityviewcontent")
     expect(result.jsonOut.keywords).toContain("geometryproxy3d")
     expect(result.jsonOut.keywords).not.toContain("how")
+    expect(result.jsonOut.keywords?.length ?? 0).toBeLessThanOrEqual(8)
   })
 })

@@ -8,11 +8,13 @@ import {
   tokenizeKeywordText,
 } from "./markdown-utils"
 import type {
+  StepIntoVisionLicense,
   StepIntoVisionLink,
   StepIntoVisionLinkRole,
   StepIntoVisionLicenseType,
   StepIntoVisionPostMetaDocument,
 } from "./types"
+import stringify from "json-stable-stringify"
 
 export interface GeneratePostOptions {
   fixCodeFenceLanguage?: boolean
@@ -23,7 +25,7 @@ interface GenerateResult {
   jsonOut: StepIntoVisionPostMetaDocument
 }
 
-const KEYWORD_LIMIT = 12
+const KEYWORD_LIMIT = 8
 const KEYWORD_WEIGHT_MARKDOWN = 2
 const KEYWORD_WEIGHT_CATEGORY = 3
 const KEYWORD_WEIGHT_TAG = 3
@@ -173,8 +175,52 @@ function normalizeReferences(meta: StepIntoVisionPostMetaDocument) {
   return { references: uniqueReferences, links: filteredLinks }
 }
 
-function buildContentDigest(markdown: string): string {
-  const canonical = canonicalizeMarkdown(markdown)
+function normalizeLicense(
+  license?: StepIntoVisionLicense | StepIntoVisionLicenseType | string,
+): StepIntoVisionLicense {
+  const fallback: StepIntoVisionLicense = { type: "AllRightsReserved" }
+  if (!license) {
+    return fallback
+  }
+
+  const normalizeType = (value: string): StepIntoVisionLicenseType | null => {
+    const lower = value.trim().toLowerCase()
+    switch (lower) {
+      case "allrightsreserved":
+      case "all rights reserved":
+        return "AllRightsReserved"
+      case "cc-by-4.0":
+      case "cc by 4.0":
+        return "CC-BY-4.0"
+      case "cc0":
+        return "CC0"
+      case "mit":
+        return "MIT"
+      case "apache-2.0":
+      case "apache 2.0":
+        return "Apache-2.0"
+      default:
+        return null
+    }
+  }
+
+  if (typeof license === "string") {
+    const normalized = normalizeType(license)
+    return normalized ? { type: normalized } : fallback
+  }
+
+  const normalized = normalizeType(license.type)
+  const type = normalized ?? fallback.type
+  return {
+    type,
+    ...(license.url ? { url: canonicalizeUrl(license.url) } : {}),
+  }
+}
+
+function buildContentDigest(
+  base: Omit<StepIntoVisionPostMetaDocument, "contentDigest">,
+): string {
+  const canonical = stringify(base)
   const digest = createHash("sha256").update(canonical, "utf8").digest("hex")
   return `sha256-${digest}`
 }
@@ -186,10 +232,11 @@ export function generatePostArtifacts(
 ): GenerateResult {
   const { fixCodeFenceLanguage = true } = options
 
-  const markdownOut = fixCodeFenceLanguage
+  const fenced = fixCodeFenceLanguage
     ? ensureCodeFenceLanguages(markdown, { fixCodeFenceLanguage: true })
     : markdown
 
+  const markdownOut = canonicalizeMarkdown(fenced)
   const analysis = analyzeMarkdown(markdownOut)
   const wordCount = analysis.wordCount
   const readingTimeSeconds = Math.max(0, Math.ceil((wordCount / 200) * 60))
@@ -204,8 +251,9 @@ export function generatePostArtifacts(
     blocks: codeBlocks,
   }
 
-  const normalized = false
-  const normalizedScope = "none" as const
+  const normalized = json.normalized ?? (json.normalizedScope === "prose") ?? false
+  const normalizedScope = json.normalizedScope ?? (normalized ? "prose" : "none")
+  const verbatim = json.verbatim ?? true
 
   const mcpResource =
     json.mcpResource ?? json.markdownUri ?? `stepintovision://post/${json.slug}`
@@ -219,50 +267,89 @@ export function generatePostArtifacts(
     references: json.references,
   })
 
-  const filteredLinks = videoUrl
+  let filteredLinks = videoUrl
     ? links.filter((link) => !(link.role === "video" && urlsEqual(link.url, videoUrl)))
     : links
 
-  const categories = uniqueBy((json.categories ?? []).map((category) => category.trim()).filter(Boolean), (value) => value)
+  if (videoUrl && !filteredLinks.some((link) => link.role === "video" && urlsEqual(link.url, videoUrl))) {
+    filteredLinks = [
+      ...filteredLinks,
+      {
+        role: "video" as StepIntoVisionLinkRole,
+        url: videoUrl,
+        title: "Video demo",
+        sourceType: "thirdParty",
+        rel: "supporting",
+      },
+    ]
+  }
+
+  const categories = uniqueBy(
+    (json.categories ?? []).map((category) => category.trim()).filter(Boolean),
+    (value) => value,
+  )
   const tags = normalizeTags(json.tags ?? [])
 
-  const baseMeta: StepIntoVisionPostMetaDocument = {
-    ...json,
-    schema: "mcp.post.v1",
-    mcpResource,
-    markdownUri,
-    canonicalUrl: canonicalizeUrl(json.canonicalUrl),
-    author: typeof json.author === "string" ? { name: json.author } : json.author,
-    license:
-      typeof json.license === "string"
-        ? { type: json.license as StepIntoVisionLicenseType }
-        : json.license,
-    wordCount,
-    readingTimeSeconds,
-    tokenCount: json.tokenCount ?? 0,
-    normalized,
-    normalizedScope,
-    verbatim: json.verbatim ?? true,
-    code,
-    categories,
-    tags,
-    references,
-    links: filteredLinks,
-    version: json.version ?? 1,
-    keywords: buildKeywords(markdownOut, {
+  const author = typeof json.author === "string" ? { name: json.author } : json.author
+  const normalizedAuthor = author?.name ? { ...author, name: author.name.trim() } : { name: "Unknown" }
+
+  const license = normalizeLicense(json.license ?? "AllRightsReserved")
+
+  const keywords = buildKeywords(
+    markdownOut,
+    {
       ...json,
       categories,
       tags,
       references,
-    }, analysis.text),
+    },
+    analysis.text,
+  )
+
+  const baseMeta: Omit<StepIntoVisionPostMetaDocument, "contentDigest"> = {
+    schema: "mcp.post.v1",
+    id: json.id,
+    slug: json.slug,
+    title: json.title,
+    description: json.description,
+    summary: json.summary,
+    locale: json.locale,
+    canonicalUrl: canonicalizeUrl(json.canonicalUrl),
+    markdownUri,
+    mcpResource,
+    publishedAt: json.publishedAt,
+    updatedAt: json.updatedAt,
+    categories,
+    tags,
+    author: normalizedAuthor,
+    license,
+    contentType: "text/markdown",
+    wordCount,
+    readingTimeSeconds,
+    normalized,
+    verbatim,
+    ...(normalizedScope ? { normalizedScope } : {}),
+    code,
+    media: json.media ?? [],
+    seeAlso: json.seeAlso ?? [],
+    references,
+    links: filteredLinks,
+    ...(videoUrl ? { videoUrl } : {}),
+    ...(json.assetSourceUrl
+      ? { assetSourceUrl: canonicalizeUrl(json.assetSourceUrl) }
+      : {}),
+    ...(json.assetAuthor ? { assetAuthor: json.assetAuthor } : {}),
+    ...(json.assetLicense ? { assetLicense: json.assetLicense } : {}),
+    ...(json.status ? { status: json.status } : {}),
+    ...(keywords.length > 0 ? { keywords } : {}),
+    version: json.version ?? 1,
   }
 
-  const contentDigest = buildContentDigest(markdownOut)
+  const contentDigest = buildContentDigest(baseMeta)
 
   const jsonOut: StepIntoVisionPostMetaDocument = {
     ...baseMeta,
     contentDigest,
-    ...(videoUrl ? { videoUrl } : {}),
   }
 
   return { markdownOut, jsonOut }

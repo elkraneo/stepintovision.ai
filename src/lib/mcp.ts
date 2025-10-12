@@ -175,7 +175,6 @@ export function buildMetaDocument(
     license: { type: post.license },
     contentType: MARKDOWN_MIME_TYPE,
     wordCount: post.wordCount,
-    tokenCount: post.tokenCount,
     readingTimeSeconds: post.readingTimeSeconds,
     normalized: post.normalized,
     verbatim: post.verbatim,
