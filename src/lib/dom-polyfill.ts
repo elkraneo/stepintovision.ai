@@ -21,6 +21,8 @@ function ensureWindowAndDocument() {
     globalScope.self = window
   }
 
+  ensureTableRowsSupport(window)
+
   const constructorNames = [
     "Document",
     "DocumentFragment",
@@ -54,3 +56,39 @@ export function ensureDomEnvironment() {
 }
 
 ensureDomEnvironment()
+
+function ensureTableRowsSupport(window: Record<string, unknown>) {
+  const HTMLElementConstructor = window.HTMLElement as Record<string, unknown> | undefined
+  if (!HTMLElementConstructor) {
+    return
+  }
+
+  const prototype = HTMLElementConstructor.prototype as Record<string, unknown> | undefined
+  if (!prototype || typeof prototype !== "object") {
+    return
+  }
+
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, "rows")
+  if (descriptor && typeof descriptor.get === "function") {
+    return
+  }
+
+  Object.defineProperty(prototype, "rows", {
+    get(this: Record<string, unknown>) {
+      const element = this
+      const tagName = typeof element.tagName === "string" ? element.tagName : undefined
+      if (!tagName || tagName.toUpperCase() !== "TABLE") {
+        return undefined
+      }
+
+      const getElementsByTagName = element.getElementsByTagName as ((tag: string) => unknown) | undefined
+      if (typeof getElementsByTagName !== "function") {
+        return undefined
+      }
+
+      return getElementsByTagName.call(element, "tr")
+    },
+    configurable: true,
+    enumerable: false,
+  })
+}

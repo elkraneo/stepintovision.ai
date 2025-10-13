@@ -84,9 +84,23 @@ metadata; append `/mcp` for the MCP endpoint.
    refresh without another deploy:
 
    ```bash
-   wrangler kv:key put --binding STEPINTOVISION_CATALOG_KV \
-     catalog.json --path data/stepintovision.json
+   npx wrangler kv key put catalog.json \
+     --binding=STEPINTOVISION_CATALOG_KV \
+     --path=data/stepintovision.json \
+     --remote
    ```
+
+   Verify the upload (also against the remote namespace):
+
+   ```bash
+   npx wrangler kv key get catalog.json \
+     --binding=STEPINTOVISION_CATALOG_KV \
+     --text \
+     --remote
+   ```
+
+   The `--remote` flag opts the command into Cloudflare’s hosted KV instead of
+   the local development store.
 
    If you do not have KV configured, you can fall back to an environment secret
    so the worker can hydrate itself at runtime:
