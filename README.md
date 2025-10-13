@@ -1,76 +1,126 @@
-# Step Into Vision MCP
-![Terminal window showing Codex analysis output summarizing ornament coverage across Step Into Vision labs.](./assets/example-codex-query-ornaments-output.png "Codex ornament query output")
+# stepintovision.ai
 
-This repository packages a Swift-first toolchain for exploring Step Into Vision content. Everything you need to ingest data and serve it over the Model Context Protocol lives in the Swift package so you can stay in one toolchain from start to finish.
+A TypeScript rewrite of the Step Into Vision content service inspired by the
+[architecture of sosumi.ai](https://github.com/NSHipster/sosumi.ai). It ingests
+the live WordPress site and serves the catalog over HTTP (REST + MCP) for local
+development or Cloudflare Workers.
 
-## Requirements
+## Project Layout
 
-- Swift 6.1 (available via Xcode 16 or the Swift 6 toolchains)
+- `src/index.ts` – Hono application entrypoint (HTTP + MCP).
+- `src/lib/` – Shared domain logic for catalog storage, search, rendering, and
+  ingestion helpers.
+- `src/cli/ingest.ts` – CLI that fetches Step Into Vision posts and produces a
+  static catalog file.
+- `tests/` – Vitest unit tests.
+- `data/` – Ignored directory that holds the generated catalog (`json` or
+  SQLite) on your machine.
 
-## Repository Layout
+## TypeScript Quick Start (HTTP Worker)
 
-- `swift/StepIntoVisionMCP/` – Swift-only ingestion + MCP server built on the official Model Context Protocol Swift SDK and sqlite-data
-- `data/` – empty folder kept for your local SQLite database (ignored by git)
+### Prerequisites
 
-## Swift Quick Start
+- Node.js 18 or newer
+- npm 10 or newer
 
-The Swift tooling is self-contained: it ingests the Step Into Vision WordPress feed, stores it with sqlite-data, and serves the tools over STDIO.
+### 1. Install dependencies
 
-1. **Build (or fetch dependencies)**
+```bash
+npm install
+```
 
-   ```bash
-   swift build --package-path swift/StepIntoVisionMCP
-   ```
+### 2. Ingest the catalog
 
-2. **Ingest the Step Into Vision catalog**
+Fetch Step Into Vision posts and write them to `data/stepintovision.json`:
 
-   ```bash
-   swift run --package-path swift/StepIntoVisionMCP stepintovision-ingest --db data/stepinto.db
-   ```
+```bash
+npm run ingest
+```
 
-   Use `--help` for options such as `--base-url`, `--per-page`, or incremental syncs with `--modified-after`.
+Use `--max-pages`, `--modified-after`, or `--output` to control pagination,
+incremental syncs, and where the JSON file is written. The CLI targets
+[`https://stepinto.vision`](https://stepinto.vision) by default.
 
-3. **Serve the MCP tools over STDIO**
+### 3. Run the development server
 
-   ```bash
-   swift run --package-path swift/StepIntoVisionMCP stepintovision-mcp --db data/stepinto.db
-   ```
+```bash
+npm run dev
+```
 
-   Add `--verbose` to watch requests stream by.
+The worker listens on `http://localhost:8787`. The root endpoint returns service
+metadata; append `/mcp` for the MCP endpoint.
 
-4. **Connect from an MCP client**
+### 4. Call the API
 
-   - **`gpt5-codex`** `config.toml` example:
+- `GET /posts` – Paginated list with optional `category`, `tag`, `limit`, and
+  `offset`.
+- `GET /posts/:slug` – Markdown or JSON for an individual post.
+- `GET /posts/id/:id` – Fetch by numeric WordPress identifier.
+- `GET /search?q=vision` – Keyword search backed by Fuse.js.
+- `POST /mcp` – Model Context Protocol endpoint (streaming HTTP).
+- AI-readable shortcuts – Swap the production domain for
+  [`https://stepintovision.ai`](https://stepintovision.ai) or hit
+  `http://localhost:8787/mcp/<slug>` for Markdown-ready payloads.
 
-     ```toml
-     [mcp_servers.StepIntoVision]
-     command = "/path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepintovision-mcp"
-     args    = ["--db", "/path/to/stepintovision.ai/data/stepinto.db"]
-     ```
+### 5. Testing & quality
 
-   - **`Companion`** (app):
+- `npm run test` – Vitest unit tests.
+- `npm run format` – Biome formatter.
+- `npm run lint` – Lint fixes.
+- `npm run check` – Run formatter and linter together.
 
-     1. Open Companion, click the <kbd>+</kbd> button, and pick **STDIO**.
-     2. Set **Command** to `/path/to/stepintovision.ai/swift/StepIntoVisionMCP/.build/debug/stepintovision-mcp`.
-     3. Use the **Arguments** table to add two separate entries: first `--db`, then `/path/to/stepintovision.ai/data/stepinto.db`. (Do not comma-separate them—Companion passes each row as a distinct process argument.)
-     4. Save. Companion should connect immediately and list `list_posts`, `get_post`, and `search_posts`. Use the in-app **Tools** view to verify registration before calling them.
+### 6. Deploy to Cloudflare Workers
 
-     _Companion's command-line interface does not yet expose flags for configuring STDIO servers. Use the macOS/iOS app to add the server, or keep an eye on the [upstream README](https://github.com/mattt/Companion) for CLI support updates._
+```bash
+npm run build
+npx wrangler deploy
+```
 
-5. **Run the Swift tests whenever you touch the core library**
+Regenerate Worker binding types after configuration changes with:
 
-   ```bash
-   swift test --package-path swift/StepIntoVisionMCP
-   ```
+```bash
+npm run cf-typegen
+```
 
-## Available Tools
+## MCP Clients
 
-- `list_posts(limit=10, offset=0, category_slug=None, tag_slug=None)` – paginated listing of recent articles.
-- `get_post(slug=None, post_id=None, include_html=False, include_text=True)` – fetch a single record.
-- `search_posts(query, limit=10, offset=0, include_html=False)` – keyword search across title, excerpt, tags, and body.
+Choose the integration that matches your client’s capabilities.
 
-All responses include canonical URLs so that downstream consumers can cite the original content.
+### Option A: HTTP worker (direct HTTP clients)
 
-## Data Storage
+Run `npm run dev` (or host the worker) so the MCP endpoint is reachable at
+`http://localhost:8787/mcp`.
 
-The `data/` directory is intentionally empty in git; each user generates their own `stepinto.db` via the ingestion CLI.
+- **gpt5-codex CLI**
+
+  ```toml
+  [mcp_servers.stepIntoVision]
+  url = "http://localhost:8787/mcp"
+  ```
+
+  Swap the URL for your deployed endpoint when hosting remotely.
+
+### Option B: HTTP worker via `mcp-remote` (STDIO-only clients)
+
+Some MCP clients (Companion, Claude Desktop, etc.) expect STDIO servers. Use the
+official `mcp-remote` bridge to translate HTTP into STDIO.
+
+```bash
+npx -y mcp-remote http://localhost:8787/mcp
+```
+
+- **Companion app**
+
+  1. Open Companion, click the <kbd>+</kbd> button, and choose **STDIO**.
+  2. Set **Command** to `npx`.
+  3. Add three separate **Arguments** rows: `-y`, `mcp-remote`,
+     `http://localhost:8787/mcp`.
+  4. Save. Companion should connect to the HTTP relay and list
+     `listStepIntoVisionPosts`, `getStepIntoVisionPost`, and
+     `searchStepIntoVisionPosts`.
+
+## License
+
+All rights reserved. Step Into Vision content remains the property of its
+respective creators; contact the maintainers for licensing or redistribution
+requests.

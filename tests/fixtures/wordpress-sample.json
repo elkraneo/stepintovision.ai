@@ -1,0 +1,27 @@
+[
+  {
+    "id": 1,
+    "slug": "sample-post",
+    "link": "https://example.test/sample-post",
+    "date": "2024-01-01T00:00:00",
+    "modified": "2024-01-02T00:00:00",
+    "title": { "rendered": "Sample &amp; Post" },
+    "excerpt": { "rendered": "<p>Short summary</p>" },
+    "content": {
+      "rendered": "<p>Hello</p><p>World</p>"
+    },
+    "_embedded": {
+      "wp:term": [
+        [
+          { "taxonomy": "category", "name": "News" }
+        ],
+        [
+          { "taxonomy": "post_tag", "name": "sample" }
+        ]
+      ],
+      "wp:featuredmedia": [
+        { "source_url": "https://example.test/image.jpg" }
+      ]
+    }
+  }
+]
