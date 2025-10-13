@@ -76,17 +76,19 @@ const PROSE_PARENT_TYPES = new Set([
   "link",
 ])
 
-let cachedParser: Processor | null = null
-let cachedStringifier: Processor | null = null
+type AnyProcessor = Processor<any, any, any, any, any>
 
-function getParser(): Processor {
+let cachedParser: AnyProcessor | null = null
+let cachedStringifier: AnyProcessor | null = null
+
+function getParser(): AnyProcessor {
   if (!cachedParser) {
     cachedParser = unified().use(remarkParse).use(remarkGfm).freeze()
   }
   return cachedParser
 }
 
-function getStringifier(): Processor {
+function getStringifier(): AnyProcessor {
   if (!cachedStringifier) {
     cachedStringifier = unified()
       .use(remarkGfm)
