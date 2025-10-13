@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { DEFAULT_CATALOG_PATH, saveCatalog } from "../lib/catalog"
+import { DEFAULT_CATALOG_PATH, saveCatalog } from "../lib/catalog-file"
 import type { StepIntoVisionPost } from "../lib/types"
 import { fetchWordPressPosts } from "../lib/wordpress"
 

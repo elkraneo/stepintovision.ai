@@ -7,7 +7,9 @@ development or Cloudflare Workers.
 
 ## Project Layout
 
-- `src/index.ts` – Hono application entrypoint (HTTP + MCP).
+- `src/app.ts` – Shared Hono application factory (HTTP + MCP).
+- `src/index.ts` – Node.js entrypoint used for local development.
+- `src/worker.ts` – Cloudflare Workers entrypoint fed by environment bindings.
 - `src/lib/` – Shared domain logic for catalog storage, search, rendering, and
   ingestion helpers.
 - `src/cli/ingest.ts` – CLI that fetches Step Into Vision posts and produces a
@@ -71,10 +73,20 @@ metadata; append `/mcp` for the MCP endpoint.
 
 ### 6. Deploy to Cloudflare Workers
 
-```bash
-npm run build
-npx wrangler deploy
-```
+1. Ensure your catalog JSON is available locally (see ingestion step above).
+2. Upload the catalog to Cloudflare as an environment secret so the worker can
+   hydrate itself at runtime:
+
+   ```bash
+   wrangler secret put STEPINTOVISION_CATALOG < data/stepintovision.json
+   ```
+
+3. Build and deploy the worker:
+
+   ```bash
+   npm run build
+   npx wrangler deploy
+   ```
 
 Regenerate Worker binding types after configuration changes with:
 
