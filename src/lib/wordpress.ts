@@ -708,11 +708,15 @@ function prepareContent(rawHtml: string, context: PrepareContentContext = {}): P
 
   let markdown = turndown.turndown(cleanedHtml).trim()
   markdown = canonicalizeMarkdown(markdown)
-  const normalizedMarkdown = normalizeMarkdownProse(markdown, applyGrammarFixesToProse)
-  markdown = normalizedMarkdown.markdown
   markdown = ensureCodeFenceLanguages(markdown)
   markdown = canonicalizeMarkdown(markdown)
-  const analysis = analyzeMarkdown(markdown)
+  const normalizedMarkdown = normalizeMarkdownProse(markdown, applyGrammarFixesToProse, {
+    includeTree: true,
+    canonicalize: false,
+  })
+  markdown = normalizedMarkdown.markdown
+  const analysis = analyzeMarkdown(markdown, { tree: normalizedMarkdown.tree })
+  markdown = canonicalizeMarkdown(markdown)
 
   const baseReferences = collectReferenceLinks($)
   const references = augmentReferencesWithApiMentions(baseReferences, markdown)
