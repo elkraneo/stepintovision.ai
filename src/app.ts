@@ -15,6 +15,7 @@ import { createMcpServer } from "./lib/mcp"
 export interface StepIntoVisionBindings {
   STEPINTOVISION_CATALOG?: string
   STEPINTOVISION_CATALOG_KV?: KVNamespace
+  STEPINTOVISION_ALLOW_WORKER_INGEST?: string
 }
 
 export interface CreateAppOptions {

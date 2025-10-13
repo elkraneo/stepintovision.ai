@@ -74,8 +74,22 @@ metadata; append `/mcp` for the MCP endpoint.
 ### 6. Deploy to Cloudflare Workers
 
 1. Ensure your catalog JSON is available locally (see ingestion step above).
-2. Upload the catalog to Cloudflare as an environment secret so the worker can
-   hydrate itself at runtime:
+   
+   > **Cloudflare CPU limits:** The Workers Free plan only allows ~10 ms of CPU
+   > time per request. Because ingesting the WordPress feed requires fetching
+   > and normalizing hundreds of posts, the Worker does **not** attempt to build
+   > the catalog itself unless you explicitly opt-in. Run the ingestion CLI
+   > outside of Cloudflare and upload the resulting JSON as described below.
+2. Upload the catalog to Cloudflare—KV storage is recommended so the worker can
+   refresh without another deploy:
+
+   ```bash
+   wrangler kv:key put --binding STEPINTOVISION_CATALOG_KV \
+     catalog.json --path data/stepintovision.json
+   ```
+
+   If you do not have KV configured, you can fall back to an environment secret
+   so the worker can hydrate itself at runtime:
 
    ```bash
    wrangler secret put STEPINTOVISION_CATALOG < data/stepintovision.json
@@ -87,6 +101,10 @@ metadata; append `/mcp` for the MCP endpoint.
    npm run build
    npx wrangler deploy
    ```
+
+4. (Optional) If your Cloudflare plan provides enough CPU time and you want the
+   worker to self-ingest on deploys or cron triggers, set the
+   `STEPINTOVISION_ALLOW_WORKER_INGEST` environment variable to `true`.
 
 Regenerate Worker binding types after configuration changes with:
 

@@ -14,6 +14,7 @@ let latestCatalogJson: string | undefined
 let catalogLoadPromise: Promise<void> | undefined
 let ingestPromise: Promise<void> | undefined
 let initialIngestStarted = false
+let workerIngestDisabledLogged = false
 
 const catalogLoader = createJsonCatalogLoader(async () => latestCatalogJson)
 const app = createApp({ loader: catalogLoader, isDev: false })
@@ -62,6 +63,11 @@ function maybeRunInitialIngest(env: WorkerEnv, ctx: ExecutionContext) {
     return
   }
 
+  if (!isWorkerIngestEnabled(env)) {
+    logWorkerIngestDisabled()
+    return
+  }
+
   initialIngestStarted = true
   queueIngest(env, ctx, "initial deploy ingest").catch(() => {
     initialIngestStarted = false
@@ -69,6 +75,11 @@ function maybeRunInitialIngest(env: WorkerEnv, ctx: ExecutionContext) {
 }
 
 function queueIngest(env: WorkerEnv, ctx: ExecutionContext, reason: string) {
+  if (!isWorkerIngestEnabled(env)) {
+    logWorkerIngestDisabled()
+    return Promise.resolve()
+  }
+
   const promise = runIngest(env, reason)
   ctx.waitUntil(promise)
   return promise
@@ -96,6 +107,21 @@ async function runIngest(env: WorkerEnv, reason: string) {
   }
 
   await ingestPromise
+}
+
+function isWorkerIngestEnabled(env: WorkerEnv): boolean {
+  return env.STEPINTOVISION_ALLOW_WORKER_INGEST === "true"
+}
+
+function logWorkerIngestDisabled() {
+  if (workerIngestDisabledLogged) {
+    return
+  }
+
+  workerIngestDisabledLogged = true
+  console.warn(
+    "Worker ingestion disabled (Cloudflare Workers Free plan only provides ~10ms of CPU time). Run `npm run ingest` locally and upload the catalog JSON; set STEPINTOVISION_ALLOW_WORKER_INGEST=true to opt back in when you have higher limits.",
+  )
 }
 
 function buildCatalogPayload(posts: StepIntoVisionPost[]): string {
