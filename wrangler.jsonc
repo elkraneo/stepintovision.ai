@@ -4,6 +4,18 @@
   "main": "dist/worker.js",
   "compatibility_date": "2024-11-01",
   "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["0 */8 * * *"]
+  },
+  "kv_namespaces": [
+    {
+      // Replace with your production KV namespace id.
+      "binding": "STEPINTOVISION_CATALOG_KV",
+      "id": "<production namespace id>",
+      // Replace with your preview KV namespace id.
+      "preview_id": "<preview namespace id>"
+    }
+  ],
   "observability": {
     "enabled": true
   }

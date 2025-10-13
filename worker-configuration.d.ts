@@ -2,4 +2,5 @@
 export interface Env {
   NODE_ENV: string
   STEPINTOVISION_CATALOG?: string
+  STEPINTOVISION_CATALOG_KV?: KVNamespace
 }
