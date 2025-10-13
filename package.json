@@ -27,6 +27,7 @@
     "hono": "^4.6.7",
     "html-to-text": "^9.0.5",
     "json-stable-stringify": "^1.1.1",
+    "linkedom": "^0.18.0",
     "mdast-util-to-string": "^4.0.0",
     "remark-gfm": "^4.0.0",
     "remark-parse": "^11.0.0",

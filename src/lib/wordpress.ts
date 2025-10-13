@@ -1,3 +1,5 @@
+import "./dom-polyfill"
+
 import { htmlToText } from "html-to-text"
 import { load } from "cheerio"
 import type { Element } from "domhandler"
