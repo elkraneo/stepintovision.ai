@@ -6,7 +6,7 @@ import stringify from "json-stable-stringify"
 import { z } from "zod"
 
 import { getPostById, getPostBySlug, listPosts, searchPosts } from "./catalog"
-import type { CatalogLoader } from "./catalog-loader"
+import type { CatalogLoader } from "./catalog-loader/types"
 import { buildRenderedPostMarkdown, renderPostMarkdown } from "./markdown"
 import { extractKeywordCandidates, tokenizeKeywordText } from "./markdown-utils"
 import type { RenderedPostMarkdown } from "./markdown"

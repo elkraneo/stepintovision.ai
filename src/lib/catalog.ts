@@ -1,43 +1,21 @@
-import { readFile, writeFile } from "node:fs/promises"
-import { existsSync } from "node:fs"
 import Fuse from "fuse.js"
 
-import type { CatalogFile, CatalogMetadata, SearchHit, StepIntoVisionPost } from "./types"
+import type { CatalogFile, SearchHit, StepIntoVisionPost } from "./types"
 
-export const DEFAULT_CATALOG_PATH = "data/stepintovision.json"
-
-export async function loadCatalog(filePath = DEFAULT_CATALOG_PATH): Promise<CatalogFile> {
-  if (!existsSync(filePath)) {
-    return {
-      metadata: {
-        source: "https://stepinto.vision",
-        generatedAt: new Date(0).toISOString(),
-        itemCount: 0,
-      },
-      posts: [],
-    }
+export function createEmptyCatalog(): CatalogFile {
+  return {
+    metadata: {
+      source: "https://stepinto.vision",
+      generatedAt: new Date(0).toISOString(),
+      itemCount: 0,
+    },
+    posts: [],
   }
-
-  const raw = await readFile(filePath, "utf8")
-  const parsed = JSON.parse(raw) as CatalogFile
-  return parsed
 }
 
-export async function saveCatalog(
-  posts: StepIntoVisionPost[],
-  filePath = DEFAULT_CATALOG_PATH,
-  metadata: Partial<CatalogMetadata> = {},
-): Promise<void> {
-  const payload: CatalogFile = {
-    metadata: {
-      source: metadata.source ?? "https://stepinto.vision",
-      generatedAt: metadata.generatedAt ?? new Date().toISOString(),
-      itemCount: posts.length,
-    },
-    posts,
-  }
-
-  await writeFile(filePath, JSON.stringify(payload, null, 2), "utf8")
+export function parseCatalog(raw: string): CatalogFile {
+  const parsed = JSON.parse(raw) as CatalogFile
+  return parsed
 }
 
 export function getPostBySlug(posts: StepIntoVisionPost[], slug: string): StepIntoVisionPost | undefined {
