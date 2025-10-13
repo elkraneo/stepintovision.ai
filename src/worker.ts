@@ -85,6 +85,9 @@ async function runIngest(env: WorkerEnv, reason: string) {
         console.log(`Step Into Vision ingest completed (${posts.length} posts)`)
       } catch (error) {
         console.error(`Step Into Vision ingest failed (${reason})`, error)
+        if (error instanceof Error && error.stack) {
+          console.error(error.stack)
+        }
         throw error
       }
     })().finally(() => {

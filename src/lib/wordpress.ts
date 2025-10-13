@@ -221,7 +221,15 @@ export async function fetchWordPressPosts(options: WordPressIngestOptions = {}):
     }
 
     for (const raw of data) {
-      posts.push(normalizeWordPressPost(raw))
+      try {
+        posts.push(normalizeWordPressPost(raw))
+      } catch (error) {
+        console.error("Failed to normalize WordPress post", raw?.id ?? raw?.slug ?? "unknown", error)
+        if (error instanceof Error && error.stack) {
+          console.error(error.stack)
+        }
+        throw error
+      }
     }
 
     if (totalPages !== null && page >= totalPages) {
