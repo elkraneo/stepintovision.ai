@@ -9,11 +9,8 @@
   },
   "kv_namespaces": [
     {
-      // Replace with your production KV namespace id.
       "binding": "STEPINTOVISION_CATALOG_KV",
-      "id": "<production namespace id>",
-      // Replace with your preview KV namespace id.
-      "preview_id": "<preview namespace id>"
+      "id": "fcec7accded44d379fb57251990d2236"
     }
   ],
   "observability": {
