@@ -238,15 +238,23 @@ export function ensureCodeFenceLanguages(
   return canonical
 }
 
+export interface NormalizeMarkdownProseOptions {
+  canonicalize?: boolean
+  includeTree?: boolean
+}
+
 export interface NormalizedMarkdownResult {
   markdown: string
   changed: boolean
+  tree?: Root
 }
 
 export function normalizeMarkdownProse(
   markdown: string,
   transform: (value: string) => string,
+  options: NormalizeMarkdownProseOptions = {},
 ): NormalizedMarkdownResult {
+  const { canonicalize = true, includeTree = false } = options
   const tree = parseMarkdown(markdown)
   let changed = false
 
@@ -261,10 +269,15 @@ export function normalizeMarkdownProse(
     }
   })
 
-  const rendered = stringifyMarkdown(tree)
+  let rendered = stringifyMarkdown(tree)
+  if (canonicalize) {
+    rendered = canonicalizeMarkdown(rendered)
+  }
+
   return {
-    markdown: canonicalizeMarkdown(rendered),
+    markdown: rendered,
     changed,
+    tree: includeTree ? tree : undefined,
   }
 }
 
@@ -343,8 +356,15 @@ export interface MarkdownAnalysis {
   text: string
 }
 
-export function analyzeMarkdown(markdown: string): MarkdownAnalysis {
-  const tree = parseMarkdown(markdown)
+export interface AnalyzeMarkdownOptions {
+  tree?: Root
+}
+
+export function analyzeMarkdown(
+  markdown: string,
+  options: AnalyzeMarkdownOptions = {},
+): MarkdownAnalysis {
+  const tree = options.tree ?? parseMarkdown(markdown)
   return {
     code: extractCodeMetadataFromTree(tree),
     wordCount: countProseWords(tree),
