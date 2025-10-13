@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/master/templates/common/wrangler.schema.json",
-  "name": "stepintovision-mcp",
+  "name": "stepintovision-ai",
   "main": "dist/worker.js",
   "compatibility_date": "2024-11-01",
   "compatibility_flags": ["nodejs_compat"],
