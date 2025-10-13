@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "outDir": "dist",
-    "types": ["node"],
+    "types": ["node", "@cloudflare/workers-types"],
     "baseUrl": "./"
   },
   "include": ["src"],
