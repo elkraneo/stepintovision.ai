@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 
-import { unified } from "unified"
+import { unified, type Processor } from "unified"
 import remarkParse from "remark-parse"
 import remarkStringify from "remark-stringify"
 import remarkGfm from "remark-gfm"
@@ -76,16 +76,38 @@ const PROSE_PARENT_TYPES = new Set([
   "link",
 ])
 
-function createParser() {
-  return unified().use(remarkParse).use(remarkGfm)
+let cachedParser: Processor | null = null
+let cachedStringifier: Processor | null = null
+
+function getParser(): Processor {
+  if (!cachedParser) {
+    cachedParser = unified().use(remarkParse).use(remarkGfm).freeze()
+  }
+  return cachedParser
 }
 
-function createStringifier() {
-  return unified().use(remarkGfm).use(remarkStringify, {
-    bullet: "-",
-    fences: true,
-    listItemIndent: "one",
-  })
+function getStringifier(): Processor {
+  if (!cachedStringifier) {
+    cachedStringifier = unified()
+      .use(remarkGfm)
+      .use(remarkStringify, {
+        bullet: "-",
+        fences: true,
+        listItemIndent: "one",
+      })
+      .freeze()
+  }
+  return cachedStringifier
+}
+
+function parseMarkdown(value: string): Root {
+  const parser = getParser()
+  return parser.parse(value) as Root
+}
+
+function stringifyMarkdown(tree: Root): string {
+  const stringifier = getStringifier()
+  return stringifier.stringify(tree) as string
 }
 
 function isProseParent(parent?: Parent | null): boolean {
@@ -223,8 +245,7 @@ export function normalizeMarkdownProse(
   markdown: string,
   transform: (value: string) => string,
 ): NormalizedMarkdownResult {
-  const parser = createParser()
-  const tree = parser.parse(markdown) as Root
+  const tree = parseMarkdown(markdown)
   let changed = false
 
   visit(tree, "text", (node, _index, parent) => {
@@ -238,8 +259,7 @@ export function normalizeMarkdownProse(
     }
   })
 
-  const stringifier = createStringifier()
-  const rendered = stringifier.stringify(tree) as string
+  const rendered = stringifyMarkdown(tree)
   return {
     markdown: canonicalizeMarkdown(rendered),
     changed,
@@ -322,8 +342,7 @@ export interface MarkdownAnalysis {
 }
 
 export function analyzeMarkdown(markdown: string): MarkdownAnalysis {
-  const parser = createParser()
-  const tree = parser.parse(markdown) as Root
+  const tree = parseMarkdown(markdown)
   return {
     code: extractCodeMetadataFromTree(tree),
     wordCount: countProseWords(tree),
@@ -332,8 +351,7 @@ export function analyzeMarkdown(markdown: string): MarkdownAnalysis {
 }
 
 export function extractKeywordCandidates(markdown: string): string[] {
-  const parser = createParser()
-  const tree = parser.parse(markdown) as Root
+  const tree = parseMarkdown(markdown)
   const tokens: string[] = []
 
   visit(tree, (node) => {
