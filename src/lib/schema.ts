@@ -1,5 +1,5 @@
-import Ajv, { type DefinedError } from "ajv"
-import addFormats from "ajv-formats"
+import { Validator } from "@cfworker/json-schema"
+import type { OutputUnit, Schema } from "@cfworker/json-schema"
 import type { StepIntoVisionPostMetaDocument } from "./types"
 
 const META_SCHEMA = {
@@ -212,23 +212,22 @@ const META_SCHEMA = {
     version: { type: "integer", minimum: 1 },
     contentDigest: { type: "string", pattern: "^sha256-[a-f0-9]{64}$" },
   },
-}
+} satisfies Schema
 
-const ajv = new Ajv({ allErrors: true, strict: true })
-addFormats(ajv)
-
-const validateMetaDocument = ajv.compile<StepIntoVisionPostMetaDocument>(META_SCHEMA)
+const validator = new Validator(META_SCHEMA)
 
 export function assertValidMetaDocument(meta: StepIntoVisionPostMetaDocument): void {
-  if (validateMetaDocument(meta)) {
+  const result = validator.validate(meta)
+
+  if (result.valid) {
     return
   }
 
-  const errors = (validateMetaDocument.errors ?? []) as DefinedError[]
+  const errors = (result.errors ?? []) as OutputUnit[]
   const message = errors
     .map((error) => {
-      const path = error.instancePath || "<root>"
-      return `${path} ${error.message ?? "is invalid"}`
+      const path = error.instanceLocation || "<root>"
+      return `${path} ${error.error ?? "is invalid"}`
     })
     .join("; ")
 
