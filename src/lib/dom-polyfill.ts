@@ -35,9 +35,11 @@ function ensureWindowAndDocument() {
     "Range",
   ]
 
+  const windowRecord = window as unknown as Record<string, unknown>
+
   for (const name of constructorNames) {
-    if (typeof globalScope[name] === "undefined" && typeof (window as Record<string, unknown>)[name] !== "undefined") {
-      globalScope[name] = (window as Record<string, unknown>)[name]
+    if (typeof globalScope[name] === "undefined" && typeof windowRecord[name] !== "undefined") {
+      globalScope[name] = windowRecord[name]
     }
   }
 
