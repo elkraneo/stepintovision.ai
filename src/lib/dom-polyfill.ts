@@ -1,26 +1,24 @@
 import { DOMParser as LinkedomDOMParser, parseHTML } from "linkedom"
 
-type MutableGlobal = typeof globalThis & Record<string, unknown>
-
-const globalScope = globalThis as MutableGlobal
+const globalScope = globalThis as Record<string, unknown>
 
 function ensureDomParser() {
   if (typeof globalScope.DOMParser === "undefined") {
-    globalScope.DOMParser = LinkedomDOMParser as unknown as typeof globalScope.DOMParser
+    globalScope.DOMParser = LinkedomDOMParser
   }
 }
 
 function ensureWindowAndDocument() {
-  if (typeof globalScope.window !== "undefined" && typeof globalScope.document !== "undefined") {
+  if (globalScope.window && globalScope.document) {
     return
   }
 
   const { window, document } = parseHTML("<!doctype html><html><head></head><body></body></html>")
 
-  globalScope.window = window as unknown as Window
-  globalScope.document = document as unknown as Document
+  globalScope.window = window
+  globalScope.document = document
   if (typeof globalScope.self === "undefined") {
-    globalScope.self = window as unknown as typeof globalScope.self
+    globalScope.self = window
   }
 
   const constructorNames = [
