@@ -21,7 +21,7 @@ function ensureWindowAndDocument() {
     globalScope.self = window
   }
 
-  ensureTableRowsSupport(window)
+  ensureTableRowsSupport(window as unknown as Record<string, unknown>)
 
   const constructorNames = [
     "Document",
